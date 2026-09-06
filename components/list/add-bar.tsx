@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, Mic, MicOff, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { addItem, bulkAdd } from "@/actions/items";
 import { matchCatalog, type CatalogSuggestion } from "@/actions/catalog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { useSpeechInput } from "@/hooks/use-speech-input";
 import { findOpenByNorm, type BoardMutation } from "@/lib/board";
 import { normalizeHebrew, parseQuantity, splitBulkInput } from "@/lib/hebrew";
 import { tap } from "@/lib/haptics";
@@ -54,6 +55,9 @@ export function AddBar({
       active = false;
     };
   }, [query, shouldSuggest]);
+
+  // `submit` is a hoisted function declaration, so it is safe to reference here.
+  const speech = useSpeechInput((transcript) => submit(transcript));
 
   /** Mirrors the server's merge rule so the optimistic row matches what lands in the DB. */
   function optimisticAdd(name: string, quantity: number | null, unit: string | null) {
@@ -180,6 +184,26 @@ export function AddBar({
           aria-label="הוספת פריט"
           className="h-12 text-base"
         />
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="size-12 shrink-0"
+          aria-label={speech.isListening ? "עצירת הכתבה" : "הוספה בדיבור"}
+          aria-pressed={speech.isListening}
+          onClick={() => {
+            if (!speech.toggle()) {
+              toast.info("הדפדפן הזה לא תומך בהכתבה קולית.");
+            }
+          }}
+        >
+          {speech.isListening ? (
+            <MicOff className="size-5 text-destructive" aria-hidden />
+          ) : (
+            <Mic className="size-5" aria-hidden />
+          )}
+        </Button>
+
         <Button
           type="submit"
           size="icon"

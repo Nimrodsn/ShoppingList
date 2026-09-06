@@ -11,6 +11,7 @@ import { CategoryGroup } from "@/components/list/category-group";
 import { CheckedSection } from "@/components/list/checked-section";
 import { EmptyList } from "@/components/list/empty-list";
 import { ItemSheet } from "@/components/list/item-sheet";
+import { SearchSheet } from "@/components/list/search-sheet";
 import { applyMutation, groupItems, type BoardMutation } from "@/lib/board";
 import type { Board, BoardItem } from "@/types/board";
 
@@ -119,6 +120,10 @@ export function ListScreen({
 
   return (
     <>
+      <div className="flex justify-end px-4">
+        <SearchSheet items={items} onSelect={setEditing} />
+      </div>
+
       <div className="flex-1 space-y-4 px-4 pb-40">
         {grouped.openCount === 0 ? (
           <EmptyList hasChecked={grouped.checkedCount > 0} />
