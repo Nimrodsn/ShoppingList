@@ -1,7 +1,7 @@
 "use client";
 
 import { Drawer } from "vaul";
-import type { BoardItem, CategoryRef } from "@/actions/queries";
+import type { BoardItem, CategoryRef } from "@/types/board";
 import { ItemForm } from "@/components/list/item-form";
 
 export function ItemSheet({

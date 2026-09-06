@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { ChevronDown } from "lucide-react";
-import type { BoardItem } from "@/actions/queries";
+import type { BoardItem } from "@/types/board";
 import { ItemRow } from "@/components/list/item-row";
 import { cn } from "@/lib/utils";
 

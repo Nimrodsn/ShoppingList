@@ -27,6 +27,14 @@ export function initials(name: string): string {
     .join("");
 }
 
+/** Hebrew list join: "אמא", "אמא ואבא", "אמא, אבא ודני". */
+export function joinHebrewNames(names: string[]): string {
+  if (names.length === 0) return "";
+  if (names.length === 1) return names[0];
+  const head = names.slice(0, -1).join(", ");
+  return `${head} ו${names[names.length - 1]}`;
+}
+
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;

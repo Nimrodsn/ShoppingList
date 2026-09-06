@@ -2,7 +2,7 @@
 
 import { motion, useReducedMotion } from "motion/react";
 import { Check, Pencil, Trash2, Zap } from "lucide-react";
-import type { BoardItem } from "@/actions/queries";
+import type { BoardItem } from "@/types/board";
 import { Checkbox } from "@/components/ui/checkbox";
 import { formatQuantityWithUnit, initials, timeAgo } from "@/lib/format";
 import { tap } from "@/lib/haptics";

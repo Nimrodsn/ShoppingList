@@ -8,10 +8,24 @@ import { matchCatalog, type CatalogSuggestion } from "@/actions/catalog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
-import { parseQuantity, splitBulkInput } from "@/lib/hebrew";
+import { findOpenByNorm, type BoardMutation } from "@/lib/board";
+import { normalizeHebrew, parseQuantity, splitBulkInput } from "@/lib/hebrew";
 import { tap } from "@/lib/haptics";
+import type { BoardItem, CategoryRef } from "@/types/board";
 
-export function AddBar({ listId }: { listId: string }) {
+export function AddBar({
+  listId,
+  categories,
+  items,
+  memberName,
+  mutate,
+}: {
+  listId: string;
+  categories: CategoryRef[];
+  items: BoardItem[];
+  memberName: string;
+  mutate: (mutation: BoardMutation) => void;
+}) {
   const [value, setValue] = useState("");
   const [matched, setMatched] = useState<{
     query: string;
@@ -24,7 +38,7 @@ export function AddBar({ listId }: { listId: string }) {
   // A multi-line or comma-separated paste is a bulk add, so suggestions are pointless.
   const shouldSuggest = query.length >= 2 && splitBulkInput(query).length <= 1;
 
-  // Derived during render, which keeps stale results from a previous query off screen
+  // Derived during render, which keeps results from a previous query off screen
   // without clearing state from inside the effect.
   const suggestions = shouldSuggest && matched.query === query ? matched.items : [];
 
@@ -32,14 +46,55 @@ export function AddBar({ listId }: { listId: string }) {
     if (!shouldSuggest) return;
 
     let active = true;
-    void matchCatalog(parseQuantity(query).name || query).then((items) => {
-      if (active) setMatched({ query, items });
+    void matchCatalog(parseQuantity(query).name || query).then((results) => {
+      if (active) setMatched({ query, items: results });
     });
 
     return () => {
       active = false;
     };
   }, [query, shouldSuggest]);
+
+  /** Mirrors the server's merge rule so the optimistic row matches what lands in the DB. */
+  function optimisticAdd(name: string, quantity: number | null, unit: string | null) {
+    const existing = findOpenByNorm(items, normalizeHebrew(name), normalizeHebrew);
+
+    if (existing) {
+      mutate({
+        type: "mergeQuantity",
+        itemId: existing.id,
+        quantity: (existing.quantity ?? 1) + (quantity ?? 1),
+      });
+      return;
+    }
+
+    const suggestion = suggestions.find(
+      (entry) => normalizeHebrew(entry.name) === normalizeHebrew(name),
+    );
+    const category = suggestion
+      ? categories.find((entry) => entry.key === suggestion.categoryKey)
+      : undefined;
+    const now = new Date().toISOString();
+
+    mutate({
+      type: "add",
+      item: {
+        id: `optimistic-${crypto.randomUUID()}`,
+        name,
+        quantity,
+        unit: unit ?? suggestion?.defaultUnit ?? null,
+        note: null,
+        isChecked: false,
+        isUrgent: false,
+        position: 0,
+        categoryId: category?.id ?? null,
+        addedBy: memberName,
+        checkedBy: null,
+        createdAt: now,
+        updatedAt: now,
+      },
+    });
+  }
 
   function submit(rawText: string) {
     const text = rawText.trim();
@@ -53,6 +108,11 @@ export function AddBar({ listId }: { listId: string }) {
     startTransition(async () => {
       try {
         if (chunks.length > 1) {
+          for (const chunk of chunks) {
+            const parsed = parseQuantity(chunk);
+            if (parsed.name) optimisticAdd(parsed.name, parsed.quantity, parsed.unit);
+          }
+
           const summary = await bulkAdd({ listId, raw: text });
           const parts = [`נוספו ${summary.added}`];
           if (summary.merged > 0) parts.push(`אוחדו ${summary.merged}`);
@@ -62,10 +122,13 @@ export function AddBar({ listId }: { listId: string }) {
         }
 
         const { name, quantity, unit } = parseQuantity(text);
+        const finalName = name || text;
+        optimisticAdd(finalName, quantity, unit);
+
         const result = await addItem({
           clientId: crypto.randomUUID(),
           listId,
-          name: name || text,
+          name: finalName,
           quantity,
           unit,
         });
