@@ -362,6 +362,26 @@ export type Database = {
           realtime_key: string;
         }[];
       };
+      match_catalog: {
+        Args: {
+          p_household_id: string;
+          p_query: string;
+          p_limit?: number;
+        };
+        Returns: {
+          id: string;
+          name: string;
+          category_key: string;
+          default_unit: string;
+          emoji: string | null;
+          is_staple: boolean;
+          score: number;
+        }[];
+      };
+      bump_catalog_usage: {
+        Args: { p_household_id: string; p_names: string[] };
+        Returns: undefined;
+      };
     };
     Enums: {
       [_ in never]: never;
