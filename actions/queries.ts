@@ -2,52 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requireHousehold } from "@/lib/auth/household";
-
-export type ListSummary = {
-  id: string;
-  name: string;
-  emoji: string;
-  position: number;
-  openCount: number;
-};
-
-export type CategoryRef = {
-  id: string;
-  key: string;
-  name: string;
-  emoji: string;
-  color: string;
-  position: number;
-};
-
-export type BoardItem = {
-  id: string;
-  name: string;
-  quantity: number | null;
-  unit: string | null;
-  note: string | null;
-  isChecked: boolean;
-  isUrgent: boolean;
-  position: number;
-  categoryId: string | null;
-  addedBy: string | null;
-  checkedBy: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type CategoryGroup = CategoryRef & { items: BoardItem[] };
-
-export type Board = {
-  activeListId: string;
-  lists: ListSummary[];
-  categories: CategoryRef[];
-  urgent: BoardItem[];
-  groups: CategoryGroup[];
-  checked: BoardItem[];
-  openCount: number;
-  checkedCount: number;
-};
+import type { Board, BoardItem, CategoryRef } from "@/types/board";
 
 const ITEM_COLUMNS =
   "id, name, quantity, unit, note, is_checked, is_urgent, position, category_id, added_by, checked_by, created_at, updated_at";
@@ -101,7 +56,8 @@ export const getCategories = cache(async (): Promise<CategoryRef[]> => {
 });
 
 /**
- * Everything the list screen needs, in one round trip.
+ * Everything the list screen needs, in one round trip. Items come back flat so the
+ * client can group them over optimistic and offline state with the same pure function.
  * Ownership is filtered in code on every query, not only by the composite FKs.
  */
 export const getBoard = cache(async (listId?: string): Promise<Board | null> => {
@@ -147,44 +103,6 @@ export const getBoard = cache(async (listId?: string): Promise<Board | null> => 
     openPerList.set(row.list_id, (openPerList.get(row.list_id) ?? 0) + 1);
   }
 
-  const items = itemsResult.data.map(toBoardItem);
-  const open = items.filter((item) => !item.isChecked);
-  const checked = items
-    .filter((item) => item.isChecked)
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-
-  // Urgent items are lifted out of their category and shown at the very top.
-  const urgent = open.filter((item) => item.isUrgent);
-  const byCategory = new Map<string, BoardItem[]>();
-  for (const item of open) {
-    if (item.isUrgent) continue;
-    const key = item.categoryId ?? "uncategorized";
-    const bucket = byCategory.get(key);
-    if (bucket) bucket.push(item);
-    else byCategory.set(key, [item]);
-  }
-
-  const groups: CategoryGroup[] = categories
-    .map((category) => ({
-      ...category,
-      items: byCategory.get(category.id) ?? [],
-    }))
-    .filter((group) => group.items.length > 0);
-
-  const uncategorized = byCategory.get("uncategorized") ?? [];
-  if (uncategorized.length > 0) {
-    const other = categories.find((category) => category.key === "other");
-    groups.push({
-      id: other?.id ?? "uncategorized",
-      key: "other",
-      name: other?.name ?? "אחר",
-      emoji: other?.emoji ?? "🛒",
-      color: other?.color ?? "zinc",
-      position: other?.position ?? 999,
-      items: uncategorized,
-    });
-  }
-
   return {
     activeListId,
     lists: lists.map((list) => ({
@@ -195,10 +113,6 @@ export const getBoard = cache(async (listId?: string): Promise<Board | null> => 
       openCount: openPerList.get(list.id) ?? 0,
     })),
     categories,
-    urgent,
-    groups,
-    checked,
-    openCount: open.length,
-    checkedCount: checked.length,
+    items: itemsResult.data.map(toBoardItem),
   };
 });

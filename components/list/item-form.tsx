@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import type { BoardItem, CategoryRef } from "@/actions/queries";
+import type { BoardItem, CategoryRef } from "@/types/board";
 import { teachCategory } from "@/actions/catalog";
 import { updateItem } from "@/actions/items";
 import { Button } from "@/components/ui/button";

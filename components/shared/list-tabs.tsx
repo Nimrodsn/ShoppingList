@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { ListSummary } from "@/actions/queries";
+import type { ListSummary } from "@/types/board";
 import { cn } from "@/lib/utils";
 
 export function ListTabs({

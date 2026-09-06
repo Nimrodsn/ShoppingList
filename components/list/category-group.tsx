@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import type { BoardItem, CategoryGroup as CategoryGroupData } from "@/actions/queries";
+import type { BoardItem, CategoryGroup as CategoryGroupData } from "@/types/board";
 import { ItemRow } from "@/components/list/item-row";
 
 export type CategoryGroupProps = {
