@@ -1,0 +1,11 @@
+project_id = "our-basket"
+
+[db]
+major_version = 17
+
+[realtime]
+enabled = true
+
+[auth]
+# No Supabase Auth. Identity is a signed cookie carrying the household id.
+enabled = false
