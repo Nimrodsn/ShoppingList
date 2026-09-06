@@ -15,11 +15,13 @@ export function AppHeader({
       <div className="min-w-0">
         <h1 className="truncate font-heading text-2xl font-bold">{title}</h1>
         {subtitle ? (
-          <p className="truncate text-sm text-muted-foreground">{subtitle}</p>
+          <p aria-live="polite" className="truncate text-sm text-muted-foreground">
+            {subtitle}
+          </p>
         ) : null}
       </div>
 
-      <div className="flex shrink-0 items-center">
+      <nav aria-label="ניווט ראשי" className="flex shrink-0 items-center">
         <Button asChild variant="ghost" size="icon" className="size-11">
           <Link href="/staples" aria-label="הקנייה השבועית">
             <Star className="size-5" aria-hidden />
@@ -36,7 +38,7 @@ export function AppHeader({
             <Settings className="size-5" aria-hidden />
           </Link>
         </Button>
-      </div>
+      </nav>
     </header>
   );
 }

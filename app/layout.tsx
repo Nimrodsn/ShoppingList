@@ -3,6 +3,7 @@ import { Assistant, Rubik } from "next/font/google";
 import { SerwistProvider } from "@serwist/turbopack/react";
 import { DirectionProvider } from "@/components/ui/direction";
 import { Toaster } from "@/components/ui/sonner";
+import { MotionProvider } from "@/components/shared/motion-provider";
 import { OfflineBanner } from "@/components/shared/offline-banner";
 import { ThemeProvider } from "@/components/shared/theme-provider";
 import { OfflineQueueProvider } from "@/lib/offline/provider";
@@ -61,11 +62,13 @@ export default function RootLayout({
         <SerwistProvider swUrl="/serwist/sw.js" reloadOnOnline={false}>
           <ThemeProvider>
             <DirectionProvider dir="rtl">
-              <OfflineQueueProvider>
-                <OfflineBanner />
-                {children}
-                <Toaster position="bottom-center" dir="rtl" closeButton />
-              </OfflineQueueProvider>
+              <MotionProvider>
+                <OfflineQueueProvider>
+                  <OfflineBanner />
+                  {children}
+                  <Toaster position="bottom-center" dir="rtl" closeButton />
+                </OfflineQueueProvider>
+              </MotionProvider>
             </DirectionProvider>
           </ThemeProvider>
         </SerwistProvider>

@@ -32,7 +32,7 @@ export default async function SettingsPage() {
     <div className="mx-auto flex w-full max-w-lg flex-1 flex-col">
       <PageHeader title="הגדרות" subtitle={household.name} />
 
-      <div className="space-y-6 px-4 pb-12">
+      <main className="space-y-6 px-4 pb-12">
         <ShareCard origin={`${protocol}://${host}`} initialSlug={slug} />
         <Separator />
         <IdentityCard householdName={household.name} memberName={member.name} />
@@ -40,7 +40,7 @@ export default async function SettingsPage() {
         <ListsManager lists={board.lists} />
         <Separator />
         <CategoryReorder categories={board.categories} />
-      </div>
+      </main>
     </div>
   );
 }

@@ -14,7 +14,7 @@ export default async function HistoryPage() {
     return (
       <div className="mx-auto flex w-full max-w-lg flex-1 flex-col">
         <PageHeader title="היסטוריה" />
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-16 text-center">
+        <main className="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-16 text-center">
           <span className="text-5xl" aria-hidden>
             🧾
           </span>
@@ -22,7 +22,7 @@ export default async function HistoryPage() {
           <p className="max-w-xs text-sm text-muted-foreground">
             בסוף הקנייה הבאה, כל מה שסימנתם יישמר כאן.
           </p>
-        </div>
+        </main>
       </div>
     );
   }
@@ -31,7 +31,7 @@ export default async function HistoryPage() {
     <div className="mx-auto flex w-full max-w-lg flex-1 flex-col">
       <PageHeader title="היסטוריה" subtitle={`${entries.length} קניות אחרונות`} />
 
-      <div className="space-y-6 px-4 pb-10">
+      <main className="space-y-6 px-4 pb-10">
         {top.length > 0 ? (
           <section aria-labelledby="top-products">
             <h2 id="top-products" className="mb-2 text-sm font-semibold">
@@ -85,7 +85,7 @@ export default async function HistoryPage() {
             })}
           </ul>
         </section>
-      </div>
+      </main>
     </div>
   );
 }
