@@ -80,6 +80,28 @@ export const RenameListSchema = z.object({
   emoji: z.string().trim().min(1).max(8).optional(),
 });
 
+export const ListSnapshotSchema = z.object({
+  name: ListNameSchema,
+  emoji: z.string().trim().min(1).max(8),
+  position: z.number().int().min(0).max(999),
+  items: z
+    .array(
+      z.object({
+        name: ItemNameSchema,
+        quantity: QuantitySchema,
+        unit: UnitSchema,
+        note: NoteSchema,
+        isChecked: z.boolean(),
+        isUrgent: z.boolean(),
+        categoryId: UuidSchema.nullable(),
+        addedBy: z.string().trim().max(20).nullable(),
+      }),
+    )
+    .max(500),
+});
+
+export type ListSnapshot = z.infer<typeof ListSnapshotSchema>;
+
 export const ReorderCategoriesSchema = z.object({
   orderedIds: z.array(UuidSchema).min(1).max(64),
 });
