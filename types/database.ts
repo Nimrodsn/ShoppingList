@@ -382,6 +382,15 @@ export type Database = {
         Args: { p_household_id: string; p_names: string[] };
         Returns: undefined;
       };
+      suggest_forgotten: {
+        Args: { p_household_id: string; p_limit?: number };
+        Returns: {
+          name: string;
+          category_key: string | null;
+          avg_days: number;
+          days_since: number;
+        }[];
+      };
     };
     Enums: {
       [_ in never]: never;

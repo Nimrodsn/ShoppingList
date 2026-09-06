@@ -3,15 +3,18 @@
 import { Drawer } from "vaul";
 import type { BoardItem, CategoryRef } from "@/types/board";
 import { ItemForm } from "@/components/list/item-form";
+import { normalizeHebrew } from "@/lib/hebrew";
 
 export function ItemSheet({
   item,
   categories,
+  stapleNames,
   onClose,
   onDelete,
 }: {
   item: BoardItem | null;
   categories: CategoryRef[];
+  stapleNames: ReadonlySet<string>;
   onClose: () => void;
   onDelete: (item: BoardItem) => void;
 }) {
@@ -35,6 +38,7 @@ export function ItemSheet({
               key={item.id}
               item={item}
               categories={categories}
+              isKnownStaple={stapleNames.has(normalizeHebrew(item.name))}
               onClose={onClose}
               onDelete={onDelete}
             />

@@ -76,34 +76,39 @@ export async function teachCategory(
   revalidatePath("/");
 }
 
+/**
+ * The weekly basket. A household row always overrides the shared global row with the
+ * same normalized name, which is how "remove from weekly" works without ever editing
+ * the global catalog.
+ */
 export async function listStaples(): Promise<CatalogSuggestion[]> {
   const householdId = await requireHousehold();
 
   const { data, error } = await supabaseAdmin()
     .from("catalog_items")
-    .select("id, name, category_key, default_unit, emoji, is_staple, household_id")
+    .select("id, name, name_norm, category_key, default_unit, emoji, is_staple, household_id")
     .or(`household_id.is.null,household_id.eq.${householdId}`)
-    .eq("is_staple", true)
     .order("use_count", { ascending: false })
     .order("name");
 
   if (error || !data) return [];
 
-  const seen = new Set<string>();
-  const staples: CatalogSuggestion[] = [];
-
+  const effective = new Map<string, (typeof data)[number]>();
   for (const row of data) {
-    if (seen.has(row.name)) continue;
-    seen.add(row.name);
-    staples.push({
+    const current = effective.get(row.name_norm);
+    if (!current || (current.household_id === null && row.household_id !== null)) {
+      effective.set(row.name_norm, row);
+    }
+  }
+
+  return [...effective.values()]
+    .filter((row) => row.is_staple)
+    .map((row) => ({
       id: row.id,
       name: row.name,
       categoryKey: row.category_key,
       defaultUnit: row.default_unit,
       emoji: row.emoji,
       isStaple: row.is_staple,
-    });
-  }
-
-  return staples;
+    }));
 }

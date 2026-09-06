@@ -1,7 +1,10 @@
 "use client";
 
 import { useMemo, useOptimistic, useState, useTransition } from "react";
+import Link from "next/link";
+import { ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import { deleteItem, restoreItem, toggleItem } from "@/actions/items";
 import { AddBar } from "@/components/list/add-bar";
 import { CategoryGroup } from "@/components/list/category-group";
@@ -16,10 +19,13 @@ const UNDO_DURATION = 6000;
 export function ListScreen({
   board,
   memberName,
+  stapleNames,
 }: {
   board: Board;
   memberName: string;
+  stapleNames: string[];
 }) {
+  const stapleNorms = useMemo(() => new Set(stapleNames), [stapleNames]);
   const [editing, setEditing] = useState<BoardItem | null>(null);
   const [, startTransition] = useTransition();
 
@@ -153,7 +159,16 @@ export function ListScreen({
         />
       </div>
 
-      <div className="sticky bottom-0 z-20 border-t bg-background/95 px-4 pt-3 pb-safe backdrop-blur">
+      <div className="sticky bottom-0 z-20 space-y-2 border-t bg-background/95 px-4 pt-3 pb-safe backdrop-blur">
+        {grouped.openCount > 0 ? (
+          <Button asChild variant="secondary" className="h-11 w-full">
+            <Link href={`/shop?list=${board.activeListId}`}>
+              <ShoppingCart className="size-4" aria-hidden />
+              מצב קנייה
+            </Link>
+          </Button>
+        ) : null}
+
         <AddBar
           listId={board.activeListId}
           categories={board.categories}
@@ -166,6 +181,7 @@ export function ListScreen({
       <ItemSheet
         item={editing}
         categories={board.categories}
+        stapleNames={stapleNorms}
         onClose={() => setEditing(null)}
         onDelete={handleDelete}
       />
