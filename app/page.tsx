@@ -1,11 +1,15 @@
 import { redirect } from "next/navigation";
 import { getHousehold, getMember } from "@/lib/auth/household";
 import { getBoard } from "@/actions/queries";
+import { suggestForgotten } from "@/actions/suggestions";
+import { listStaples } from "@/actions/catalog";
+import { normalizeHebrew } from "@/lib/hebrew";
 import { RealtimeProvider } from "@/lib/realtime/provider";
 import { LandingScreen } from "@/components/shared/landing-screen";
 import { AppHeader } from "@/components/shared/app-header";
 import { ListTabs } from "@/components/shared/list-tabs";
 import { PresenceBar } from "@/components/shared/presence-bar";
+import { ForgottenBanner } from "@/components/list/forgotten-banner";
 import { ListScreen } from "@/components/list/list-screen";
 
 export default async function HomePage({
@@ -38,7 +42,12 @@ export default async function HomePage({
   }
 
   const activeList = board.lists.find((entry) => entry.id === board.activeListId);
-  const openCount = board.items.filter((item) => !item.isChecked).length;
+  const openItems = board.items.filter((item) => !item.isChecked);
+  const [forgotten, staples] = await Promise.all([
+    suggestForgotten(openItems.map((item) => item.name)),
+    listStaples(),
+  ]);
+  const stapleNames = staples.map((entry) => normalizeHebrew(entry.name));
 
   return (
     // realtimeKey reaches the client as a prop, never through a readable cookie.
@@ -50,11 +59,16 @@ export default async function HomePage({
       <div className="mx-auto flex w-full max-w-lg flex-1 flex-col">
         <AppHeader
           title={household.name}
-          subtitle={`${openCount} פריטים ב${activeList?.name ?? "רשימה"}`}
+          subtitle={`${openItems.length} פריטים ב${activeList?.name ?? "רשימה"}`}
         />
         <PresenceBar />
         <ListTabs lists={board.lists} activeListId={board.activeListId} />
-        <ListScreen board={board} memberName={member.name} />
+        <ForgottenBanner suggestions={forgotten} listId={board.activeListId} />
+        <ListScreen
+          board={board}
+          memberName={member.name}
+          stapleNames={stapleNames}
+        />
       </div>
     </RealtimeProvider>
   );

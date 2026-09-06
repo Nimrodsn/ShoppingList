@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import type { BoardItem, CategoryRef } from "@/types/board";
 import { teachCategory } from "@/actions/catalog";
 import { updateItem } from "@/actions/items";
+import { setStaple } from "@/actions/trip";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,11 +16,13 @@ import { Textarea } from "@/components/ui/textarea";
 export function ItemForm({
   item,
   categories,
+  isKnownStaple,
   onClose,
   onDelete,
 }: {
   item: BoardItem;
   categories: CategoryRef[];
+  isKnownStaple: boolean;
   onClose: () => void;
   onDelete: (item: BoardItem) => void;
 }) {
@@ -32,6 +35,7 @@ export function ItemForm({
   const [note, setNote] = useState(item.note ?? "");
   const [isUrgent, setIsUrgent] = useState(item.isUrgent);
   const [categoryId, setCategoryId] = useState(item.categoryId ?? "");
+  const [isStaple, setIsStaple] = useState(isKnownStaple);
 
   function save() {
     const parsedQuantity = quantity.trim() === "" ? null : Number(quantity);
@@ -131,6 +135,25 @@ export function ItemForm({
       <div className="flex min-h-11 items-center justify-between">
         <Label htmlFor="item-urgent">דחוף ⚡</Label>
         <Switch id="item-urgent" checked={isUrgent} onCheckedChange={setIsUrgent} />
+      </div>
+
+      <div className="flex min-h-11 items-center justify-between">
+        <Label htmlFor="item-staple">בקנייה השבועית ⭐</Label>
+        <Switch
+          id="item-staple"
+          checked={isStaple}
+          onCheckedChange={(checked) => {
+            setIsStaple(checked);
+            startTransition(async () => {
+              try {
+                await setStaple(name.trim(), checked);
+              } catch {
+                setIsStaple(!checked);
+                toast.error("לא הצלחנו לעדכן את הקנייה השבועית.");
+              }
+            });
+          }}
+        />
       </div>
 
       <div className="flex gap-3 pt-2">
