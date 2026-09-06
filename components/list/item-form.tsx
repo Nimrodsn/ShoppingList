@@ -5,13 +5,14 @@ import { Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { BoardItem, CategoryRef } from "@/types/board";
 import { teachCategory } from "@/actions/catalog";
-import { updateItem } from "@/actions/items";
 import { setStaple } from "@/actions/trip";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { isOptimisticId } from "@/lib/board";
+import { NOT_SYNCED_YET, useOfflineQueue } from "@/lib/offline/provider";
 
 export function ItemForm({
   item,
@@ -27,6 +28,7 @@ export function ItemForm({
   onDelete: (item: BoardItem) => void;
 }) {
   const [isPending, startTransition] = useTransition();
+  const queue = useOfflineQueue();
   const [name, setName] = useState(item.name);
   const [quantity, setQuantity] = useState(
     item.quantity === null ? "" : String(item.quantity),
@@ -38,34 +40,46 @@ export function ItemForm({
   const [isStaple, setIsStaple] = useState(isKnownStaple);
 
   function save() {
+    if (isOptimisticId(item.id)) {
+      toast.info(NOT_SYNCED_YET);
+      return;
+    }
+
     const parsedQuantity = quantity.trim() === "" ? null : Number(quantity);
     const categoryChanged = categoryId !== (item.categoryId ?? "");
     const trimmedName = name.trim();
 
+    const patch = {
+      name: trimmedName,
+      quantity:
+        parsedQuantity !== null && Number.isFinite(parsedQuantity)
+          ? parsedQuantity
+          : null,
+      unit: unit.trim() === "" ? null : unit.trim(),
+      note: note.trim() === "" ? null : note.trim(),
+      isUrgent,
+      categoryId: categoryId === "" ? null : categoryId,
+    };
+
     startTransition(async () => {
-      try {
-        await updateItem({
-          itemId: item.id,
-          name: trimmedName,
-          quantity:
-            parsedQuantity !== null && Number.isFinite(parsedQuantity)
-              ? parsedQuantity
-              : null,
-          unit: unit.trim() === "" ? null : unit.trim(),
-          note: note.trim() === "" ? null : note.trim(),
-          isUrgent,
-          categoryId: categoryId === "" ? null : categoryId,
-        });
+      const result = await queue.run({
+        clientId: crypto.randomUUID(),
+        kind: "update",
+        input: { itemId: item.id, ...patch },
+        optimistic: [{ type: "update", itemId: item.id, patch }],
+      });
 
-        // A manual category correction teaches the household catalog for next time.
-        if (categoryChanged && categoryId) {
-          await teachCategory(trimmedName, categoryId);
-        }
-
-        onClose();
-      } catch {
+      if (result === "failed") {
         toast.error("לא הצלחנו לשמור את השינויים.");
+        return;
       }
+
+      // A manual category correction teaches the household catalog for next time.
+      if (result === "sent" && categoryChanged && categoryId) {
+        await teachCategory(trimmedName, categoryId);
+      }
+
+      onClose();
     });
   }
 

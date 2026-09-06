@@ -1,8 +1,11 @@
 import type { Metadata, Viewport } from "next";
 import { Assistant, Rubik } from "next/font/google";
+import { SerwistProvider } from "@serwist/turbopack/react";
 import { DirectionProvider } from "@/components/ui/direction";
 import { Toaster } from "@/components/ui/sonner";
+import { OfflineBanner } from "@/components/shared/offline-banner";
 import { ThemeProvider } from "@/components/shared/theme-provider";
+import { OfflineQueueProvider } from "@/lib/offline/provider";
 import "./globals.css";
 
 const assistant = Assistant({
@@ -27,6 +30,7 @@ export const metadata: Metadata = {
     title: "הסל שלנו",
   },
   formatDetection: { telephone: false },
+  icons: { apple: "/icons/icon-192.png" },
 };
 
 export const viewport: Viewport = {
@@ -53,12 +57,18 @@ export default function RootLayout({
       className={`${assistant.variable} ${rubik.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
-        <ThemeProvider>
-          <DirectionProvider dir="rtl">
-            {children}
-            <Toaster position="bottom-center" dir="rtl" closeButton />
-          </DirectionProvider>
-        </ThemeProvider>
+        {/* `reloadOnOnline` stays off: the offline queue flushes and refreshes itself. */}
+        <SerwistProvider swUrl="/serwist/sw.js" reloadOnOnline={false}>
+          <ThemeProvider>
+            <DirectionProvider dir="rtl">
+              <OfflineQueueProvider>
+                <OfflineBanner />
+                {children}
+                <Toaster position="bottom-center" dir="rtl" closeButton />
+              </OfflineQueueProvider>
+            </DirectionProvider>
+          </ThemeProvider>
+        </SerwistProvider>
       </body>
     </html>
   );

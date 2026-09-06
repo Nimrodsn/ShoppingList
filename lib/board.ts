@@ -58,6 +58,17 @@ export function groupItems(
   };
 }
 
+const OPTIMISTIC_ID_PREFIX = "optimistic-";
+
+/** Marks a row that only exists on this device until the server hands back a real id. */
+export function optimisticId(): string {
+  return `${OPTIMISTIC_ID_PREFIX}${crypto.randomUUID()}`;
+}
+
+export function isOptimisticId(id: string): boolean {
+  return id.startsWith(OPTIMISTIC_ID_PREFIX);
+}
+
 export type BoardMutation =
   | { type: "add"; item: BoardItem }
   | { type: "toggle"; itemId: string; isChecked: boolean; by: string | null }

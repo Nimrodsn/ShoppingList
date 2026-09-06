@@ -5,14 +5,20 @@ import Link from "next/link";
 import { ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { deleteItem, restoreItem, toggleItem } from "@/actions/items";
 import { AddBar } from "@/components/list/add-bar";
 import { CategoryGroup } from "@/components/list/category-group";
 import { CheckedSection } from "@/components/list/checked-section";
 import { EmptyList } from "@/components/list/empty-list";
 import { ItemSheet } from "@/components/list/item-sheet";
 import { SearchSheet } from "@/components/list/search-sheet";
-import { applyMutation, groupItems, type BoardMutation } from "@/lib/board";
+import {
+  applyMutation,
+  applyMutations,
+  groupItems,
+  isOptimisticId,
+  type BoardMutation,
+} from "@/lib/board";
+import { NOT_SYNCED_YET, useOfflineQueue } from "@/lib/offline/provider";
 import type { Board, BoardItem } from "@/types/board";
 
 const UNDO_DURATION = 6000;
@@ -29,11 +35,17 @@ export function ListScreen({
   const stapleNorms = useMemo(() => new Set(stapleNames), [stapleNames]);
   const [editing, setEditing] = useState<BoardItem | null>(null);
   const [, startTransition] = useTransition();
+  const queue = useOfflineQueue();
 
-  // The 0ms online path only. Offline durability comes from the IndexedDB log.
-  const [items, mutate] = useOptimistic<BoardItem[], BoardMutation>(
+  // `useOptimistic` is the 0ms online path; the offline log is what survives a reload.
+  const [sent, mutate] = useOptimistic<BoardItem[], BoardMutation>(
     board.items,
     applyMutation,
+  );
+
+  const items = useMemo(
+    () => applyMutations(sent, queue.pendingMutations),
+    [sent, queue.pendingMutations],
   );
 
   const grouped = useMemo(
@@ -42,43 +54,61 @@ export function ListScreen({
   );
 
   function handleToggle(item: BoardItem) {
+    if (isOptimisticId(item.id)) {
+      toast.info(NOT_SYNCED_YET);
+      return;
+    }
+
     const isChecked = !item.isChecked;
+    const clientId = crypto.randomUUID();
+    const mutation: BoardMutation = {
+      type: "toggle",
+      itemId: item.id,
+      isChecked,
+      by: memberName,
+    };
 
     startTransition(async () => {
-      mutate({ type: "toggle", itemId: item.id, isChecked, by: memberName });
+      mutate(mutation);
 
-      try {
-        await toggleItem({
-          clientId: crypto.randomUUID(),
-          itemId: item.id,
-          isChecked,
-        });
-      } catch {
+      const result = await queue.run({
+        clientId,
+        kind: "toggle",
+        input: { clientId, itemId: item.id, isChecked },
+        optimistic: [mutation],
+      });
+
+      if (result === "failed") {
         toast.error("לא הצלחנו לעדכן את הפריט.");
         return;
       }
 
-      if (!isChecked) return;
+      if (result === "queued" || !isChecked) return;
 
       // Undo targets the item id, so it works even when another open item shares the name.
       toast.success(`${item.name} נלקח`, {
         duration: UNDO_DURATION,
         action: {
           label: "בטל",
-          onClick: () =>
+          onClick: () => {
+            const undoId = crypto.randomUUID();
+            const undo: BoardMutation = {
+              type: "toggle",
+              itemId: item.id,
+              isChecked: false,
+              by: null,
+            };
+
             startTransition(async () => {
-              mutate({
-                type: "toggle",
-                itemId: item.id,
-                isChecked: false,
-                by: null,
+              mutate(undo);
+              await queue.run({
+                clientId: undoId,
+                kind: "toggle",
+                input: { clientId: undoId, itemId: item.id, isChecked: false },
+                optimistic: [undo],
               });
-              await toggleItem({
-                clientId: crypto.randomUUID(),
-                itemId: item.id,
-                isChecked: false,
-              });
-            }),
+            });
+          },
         },
       });
     });
@@ -88,9 +118,21 @@ export function ListScreen({
     startTransition(async () => {
       mutate({ type: "delete", itemId: item.id });
 
-      try {
-        await deleteItem({ itemId: item.id });
-      } catch {
+      // An item that never reached the server is deleted by dropping its queued add.
+      if (isOptimisticId(item.id)) {
+        await queue.dropQueuedItem(item.id);
+        toast(`${item.name} נמחק`);
+        return;
+      }
+
+      const result = await queue.run({
+        clientId: crypto.randomUUID(),
+        kind: "delete",
+        input: { itemId: item.id },
+        optimistic: [{ type: "delete", itemId: item.id }],
+      });
+
+      if (result === "failed") {
         toast.error("לא הצלחנו למחוק את הפריט.");
         return;
       }
@@ -99,20 +141,28 @@ export function ListScreen({
         duration: UNDO_DURATION,
         action: {
           label: "בטל",
-          onClick: () =>
+          onClick: () => {
+            const restoreId = crypto.randomUUID();
+
             startTransition(async () => {
               mutate({ type: "add", item });
-              await restoreItem({
-                clientId: crypto.randomUUID(),
-                listId: board.activeListId,
-                name: item.name,
-                quantity: item.quantity,
-                unit: item.unit,
-                note: item.note,
-                isUrgent: item.isUrgent,
-                categoryId: item.categoryId,
+              await queue.run({
+                clientId: restoreId,
+                kind: "restore",
+                input: {
+                  clientId: restoreId,
+                  listId: board.activeListId,
+                  name: item.name,
+                  quantity: item.quantity,
+                  unit: item.unit,
+                  note: item.note,
+                  isUrgent: item.isUrgent,
+                  categoryId: item.categoryId,
+                },
+                optimistic: [{ type: "add", item }],
               });
-            }),
+            });
+          },
         },
       });
     });

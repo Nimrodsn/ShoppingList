@@ -6,14 +6,20 @@ import Link from "next/link";
 import confetti from "canvas-confetti";
 import { ArrowRight, Loader2, PartyPopper } from "lucide-react";
 import { toast } from "sonner";
-import { toggleItem } from "@/actions/items";
 import { closeTrip } from "@/actions/trip";
 import { CategoryGroup } from "@/components/list/category-group";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useRealtime } from "@/lib/realtime/provider";
 import { useWakeLock } from "@/hooks/use-wake-lock";
-import { applyMutation, groupItems, type BoardMutation } from "@/lib/board";
+import {
+  applyMutation,
+  applyMutations,
+  groupItems,
+  isOptimisticId,
+  type BoardMutation,
+} from "@/lib/board";
+import { NOT_SYNCED_YET, useOfflineQueue } from "@/lib/offline/provider";
 import { tap } from "@/lib/haptics";
 import type { Board, BoardItem } from "@/types/board";
 
@@ -29,9 +35,17 @@ export function ShoppingScreen({
   const [isPending, startTransition] = useTransition();
   const [isClosing, setIsClosing] = useState(false);
 
-  const [items, mutate] = useOptimistic<BoardItem[], BoardMutation>(
+  const queue = useOfflineQueue();
+
+  const [sent, mutate] = useOptimistic<BoardItem[], BoardMutation>(
     board.items,
     applyMutation,
+  );
+
+  // Aisles are where the signal dies, so the log carries the ticks until it returns.
+  const items = useMemo(
+    () => applyMutations(sent, queue.pendingMutations),
+    [sent, queue.pendingMutations],
   );
 
   useWakeLock(true);
@@ -50,24 +64,42 @@ export function ShoppingScreen({
   const percent = total === 0 ? 0 : Math.round((grouped.checkedCount / total) * 100);
 
   function handleToggle(item: BoardItem) {
+    if (isOptimisticId(item.id)) {
+      toast.info(NOT_SYNCED_YET);
+      return;
+    }
+
     const isChecked = !item.isChecked;
+    const clientId = crypto.randomUUID();
+    const mutation: BoardMutation = {
+      type: "toggle",
+      itemId: item.id,
+      isChecked,
+      by: memberName,
+    };
     tap();
 
     startTransition(async () => {
-      mutate({ type: "toggle", itemId: item.id, isChecked, by: memberName });
-      try {
-        await toggleItem({
-          clientId: crypto.randomUUID(),
-          itemId: item.id,
-          isChecked,
-        });
-      } catch {
-        toast.error("לא הצלחנו לעדכן את הפריט.");
-      }
+      mutate(mutation);
+
+      const result = await queue.run({
+        clientId,
+        kind: "toggle",
+        input: { clientId, itemId: item.id, isChecked },
+        optimistic: [mutation],
+      });
+
+      if (result === "failed") toast.error("לא הצלחנו לעדכן את הפריט.");
     });
   }
 
   function finish() {
+    // Closing archives the checked items, so it must never run over an unsynced tick.
+    if (queue.pending.length > 0) {
+      toast.info("יש שינויים שמחכים לחיבור. נסגור את הקנייה אחרי שהם יסונכרנו.");
+      return;
+    }
+
     setIsClosing(true);
     startTransition(async () => {
       try {
