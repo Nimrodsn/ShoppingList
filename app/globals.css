@@ -1,0 +1,181 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-assistant);
+  --font-heading: var(--font-rubik);
+  --font-mono: ui-monospace, monospace;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-urgent: var(--urgent);
+  --color-urgent-foreground: var(--urgent-foreground);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  --background: oklch(0.985 0.003 90);
+  --foreground: oklch(0.19 0.005 260);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.19 0.005 260);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.19 0.005 260);
+  --primary: oklch(0.72 0.17 150);
+  --primary-foreground: oklch(0.16 0.02 155);
+  --secondary: oklch(0.96 0.004 90);
+  --secondary-foreground: oklch(0.26 0.005 260);
+  --muted: oklch(0.96 0.004 90);
+  --muted-foreground: oklch(0.53 0.008 260);
+  --accent: oklch(0.95 0.02 150);
+  --accent-foreground: oklch(0.28 0.06 155);
+  --urgent: oklch(0.74 0.16 55);
+  --urgent-foreground: oklch(0.2 0.04 55);
+  --destructive: oklch(0.58 0.22 25);
+  --border: oklch(0.9 0.004 90);
+  --input: oklch(0.9 0.004 90);
+  --ring: oklch(0.72 0.17 150);
+  --chart-1: oklch(0.72 0.17 150);
+  --chart-2: oklch(0.74 0.16 55);
+  --chart-3: oklch(0.62 0.14 240);
+  --chart-4: oklch(0.68 0.16 330);
+  --chart-5: oklch(0.55 0.1 200);
+  --radius: 0.75rem;
+  --sidebar: oklch(0.985 0.003 90);
+  --sidebar-foreground: oklch(0.19 0.005 260);
+  --sidebar-primary: oklch(0.72 0.17 150);
+  --sidebar-primary-foreground: oklch(0.16 0.02 155);
+  --sidebar-accent: oklch(0.95 0.02 150);
+  --sidebar-accent-foreground: oklch(0.28 0.06 155);
+  --sidebar-border: oklch(0.9 0.004 90);
+  --sidebar-ring: oklch(0.72 0.17 150);
+}
+
+.dark {
+  --background: oklch(0.16 0.004 260);
+  --foreground: oklch(0.97 0.002 90);
+  --card: oklch(0.22 0.005 260);
+  --card-foreground: oklch(0.97 0.002 90);
+  --popover: oklch(0.22 0.005 260);
+  --popover-foreground: oklch(0.97 0.002 90);
+  --primary: oklch(0.76 0.17 150);
+  --primary-foreground: oklch(0.16 0.03 155);
+  --secondary: oklch(0.28 0.005 260);
+  --secondary-foreground: oklch(0.97 0.002 90);
+  --muted: oklch(0.28 0.005 260);
+  --muted-foreground: oklch(0.7 0.008 260);
+  --accent: oklch(0.32 0.04 155);
+  --accent-foreground: oklch(0.93 0.05 150);
+  --urgent: oklch(0.78 0.15 55);
+  --urgent-foreground: oklch(0.2 0.05 55);
+  --destructive: oklch(0.68 0.19 25);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.76 0.17 150);
+  --chart-1: oklch(0.76 0.17 150);
+  --chart-2: oklch(0.78 0.15 55);
+  --chart-3: oklch(0.68 0.14 240);
+  --chart-4: oklch(0.72 0.16 330);
+  --chart-5: oklch(0.6 0.1 200);
+  --sidebar: oklch(0.16 0.004 260);
+  --sidebar-foreground: oklch(0.97 0.002 90);
+  --sidebar-primary: oklch(0.76 0.17 150);
+  --sidebar-primary-foreground: oklch(0.16 0.03 155);
+  --sidebar-accent: oklch(0.32 0.04 155);
+  --sidebar-accent-foreground: oklch(0.93 0.05 150);
+  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-ring: oklch(0.76 0.17 150);
+}
+
+/* Category hues. Consumed as inline `color-mix` accents, never as a full background. */
+@theme inline {
+  --color-cat-produce: oklch(0.72 0.16 145);
+  --color-cat-bakery: oklch(0.79 0.14 75);
+  --color-cat-dairy: oklch(0.75 0.11 235);
+  --color-cat-meat: oklch(0.66 0.19 25);
+  --color-cat-frozen: oklch(0.78 0.11 200);
+  --color-cat-canned: oklch(0.75 0.15 55);
+  --color-cat-grains: oklch(0.82 0.14 95);
+  --color-cat-condiments: oklch(0.76 0.15 120);
+  --color-cat-coffee: oklch(0.68 0.04 70);
+  --color-cat-snacks: oklch(0.74 0.16 350);
+  --color-cat-drinks: oklch(0.68 0.15 255);
+  --color-cat-baby: oklch(0.75 0.14 5);
+  --color-cat-cleaning: oklch(0.73 0.12 185);
+  --color-cat-pharma: oklch(0.7 0.15 300);
+  --color-cat-household: oklch(0.66 0.03 250);
+  --color-cat-pets: oklch(0.7 0.14 165);
+  --color-cat-other: oklch(0.65 0.01 260);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+    -webkit-tap-highlight-color: transparent;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply font-heading;
+  }
+}
+
+@layer utilities {
+  /* Safe-area aware bottom padding for the thumb-zone action bar. */
+  .pb-safe {
+    padding-bottom: max(env(safe-area-inset-bottom), 0.5rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

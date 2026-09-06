@@ -1,0 +1,105 @@
+---
+description: כללי הפרויקט — אפליקציית רשימת קניות משפחתית (Next.js 16 + Supabase + Vercel, עברית RTL)
+alwaysApply: true
+---
+
+# כללי פרויקט — "הסל שלנו"
+
+אפליקציית רשימת קניות משפחתית משותפת. עברית, RTL, מובייל-פירסט, PWA.
+Next.js 16 (App Router) + React 19 + TypeScript strict + Tailwind v4 + shadcn/ui + Supabase + Vercel.
+
+## תקשורת
+- ענה לי בעברית. קוד, שמות משתנים, קומיטים והערות בקוד — באנגלית.
+- לפני שינוי שנוגע ביותר מ-3 קבצים: תאר בקצרה מה אתה עומד לעשות ואז בצע.
+- לא בטוח לגבי API של Supabase / Next.js / Tailwind v4 — בדוק בתיעוד הרשמי. **אל תמציא.**
+
+## מלכודות Next.js 16 — זכור בכל שינוי
+- `next lint` **הוסר**. ESLint flat config (`eslint.config.mjs`) + `pnpm exec eslint .`. אל תוסיף `next lint` לשום סקריפט או workflow.
+- `middleware.ts` הוא עכשיו **`proxy.ts`**, ורץ ב-Node runtime.
+- `cookies()`, `headers()` ו-`params` הם **אסינכרוניים**: `await cookies()`, `const { slug } = await params`.
+- הבנייה היא Turbopack כברירת מחדל ונכשלת כשיש קונפיג webpack. Serwist הוא תוסף webpack, ולכן הסקריפטים הם `next dev --webpack` / `next build --webpack` עם `SERWIST_SUPPRESS_TURBOPACK_WARNING=1`. אל תסיר את הדגל.
+
+## ארכיטקטורה — כללי ברזל
+1. **Server Components כברירת מחדל.** `"use client"` רק לצורך state / effect / event handler, וכמה שיותר עמוק בעץ.
+2. **כל גישה ל-DB עוברת דרך Server Actions** בתיקיית `actions/`. אין קריאות DB מהדפדפן.
+3. הדפדפן משתמש ב-Supabase **רק** ל-`channel().on('broadcast')`. לעולם לא `.from()`.
+4. הודעת broadcast מכילה `{op, table}` בלבד — **אפס תוכן שורה**. הלקוח מגיב ב-`router.refresh()` בלבד.
+5. כל Server Action מתחילה כך, בלי יוצא מן הכלל:
+   ```ts
+   "use server";
+   const householdId = await requireHousehold();   // cookie חתום + בדיקת cookie_generation מול ה-DB
+   const input = Schema.parse(raw);                // Zod
+   ```
+6. **בעלות נאכפת גם בקוד:** כל שאילתה מסננת `.eq('household_id', householdId)`, בקריאה ובכתיבה. ה-FK המורכבים הם רשת ביטחון שנייה.
+7. `lib/supabase/admin.ts` מתחיל ב-`import "server-only"` ומשתמש ב-`SUPABASE_SERVICE_ROLE_KEY`. אף פעם לא מיובא מקוד לקוח.
+8. אין Supabase Auth, אין הרשמה, אין סיסמאות. הזהות היא cookie `__Host-hh` חתום ב-HMAC (השוואה ב-`crypto.timingSafeEqual`) שמכיל `householdId` + `generation`.
+9. `member_name` / `member_id` הם זהות רכה, לא-httpOnly, ניתנת לזיוף — לתצוגה בלבד. אל תבסס עליהם הרשאה.
+10. RLS מופעל על כל טבלה **בלי אף policy** — הדפדפן לא נוגע בכלום.
+11. `realtimeKey` מגיע ללקוח כ-**prop מ-Server Component**, לא מ-cookie קריא.
+
+## נתונים
+- **אין אינדקס ייחודי על פריטים פתוחים.** מניעת כפילויות היא בקוד: חפש `list_id + name_norm + is_checked=false` → נמצא? הגדל `quantity` והחזר `{merged:true}`. אחרת insert. אינדקס ייחודי כזה מפיל את ה-Undo ואת כל ההוספות המרובות.
+- הוספה מרובה מעובדת **פריט-פריט** עם סיכום ("נוספו 6, אוחדו 2"). אף פעם לא statement אחד שנופל כולו.
+- כל mutation נושאת `clientId` (uuid) ומתבצעת אידמפוטנטית: `on conflict (client_id) do nothing`.
+- `normalizeHebrew()` ב-`lib/hebrew.ts` ו-`normalize_he()` ב-SQL חייבים להיות **זהים לוגית**. משנה אחד — משנה את השני ומעדכן את בדיקת השקילות.
+- טיפוסי DB ב-`types/database.ts` נוצרים ע"י `supabase gen types typescript`. אל תערוך ידנית.
+- `supabase db push` לא מריץ `seed.sql`. סיד גלובלי = מיגרציה ממוספרת.
+
+## TypeScript
+- `strict: true`. **אסור** `any`, `as unknown as`, `@ts-ignore`, `!` non-null assertion.
+- העדף `type` על `interface` לאובייקטים פשוטים.
+- ולידציה של כל קלט חיצוני עם Zod. הסכמות ב-`lib/schemas.ts`.
+
+## עברית ו-RTL — נכשל בקוד רוויו אם מופר
+- `<html lang="he" dir="rtl" suppressHydrationWarning>`.
+- **אסור בקוד שלנו:** `ml-` `mr-` `pl-` `pr-` `left-` `right-` `text-left` `text-right` `border-l` `border-r` `rounded-l` `rounded-r` `float-left` `float-right`.
+- **חובה במקום:** `ms-` `me-` `ps-` `pe-` `start-` `end-` `text-start` `text-end` `border-s` `border-e` `rounded-s` `rounded-e`.
+- אייקונים כיווניים: `rtl:-scale-x-100`.
+- מספרים/מחירים/תאריכים: `<span dir="ltr" className="tabular-nums">`.
+- כל מחרוזת שהמשתמש רואה — בעברית. אין טקסט אנגלי בממשק.
+- `components/ui/` הוא קוד מוזרק של shadcn ומוחרג מהבדיקה. המרתו ל-logical properties היא משימה נפרדת ומתועדת.
+- לפני commit, חייב להחזיר ריק:
+  ```bash
+  grep -rnE "\b(ml|mr|pl|pr)-|\b(left|right)-|text-(left|right)|border-[lr]\b|rounded-[lr]-|float-(left|right)" \
+    app components lib --exclude-dir=ui
+  ```
+
+## UI/UX
+- מובייל-פירסט. תכנן ל-390×844. דסקטופ = אותה עמודה `max-w-lg` ממורכזת.
+- כל אזור לחיץ ≥ 44×44px. פעולות תכופות בשליש התחתון.
+- קומפוננטות בסיס: **shadcn/ui בלבד**. אל תתקין MUI/Chakra/Ant/Bootstrap.
+- Bottom sheets: **Vaul**. טוסטים ו-Undo: **Sonner**. אנימציות: **Motion** (`motion/react`). גרירה: **@dnd-kit v6** (לא `@dnd-kit/react`). אייקונים: **lucide-react**.
+- כל פעולה הרסנית מקבלת טוסט Undo של 6 שניות. אין `confirm()` ואין `alert()`.
+- כל טעינה = Skeleton, לא ספינר על מסך ריק. כל מצב ריק = אימוג'י + משפט אנושי + CTA.
+- אנימציות spring, 150–250ms, תמיד מכבדות `prefers-reduced-motion`.
+- Dark mode דרך `next-themes` חייב לעבוד בכל מסך.
+- APIs שלא קיימים בכל דפדפן הם **progressive enhancement** בלבד, תמיד מאחורי בדיקת קיום: `navigator.vibrate` (לא קיים ב-iOS Safari), `navigator.wakeLock` (iOS 16.4+, ומשתחרר ב-blur — יש לרכוש מחדש ב-`visibilitychange`), Web Speech API.
+
+## Optimistic ואוף-ליין
+- `useOptimistic` הוא **רק** המסלול המקוון של 0ms. הוא לא שורד אוף-ליין.
+- מקור האמת המקומי הוא **לוג mutations ב-IndexedDB**, שנכתב לפני השליחה ומוחל מעל נתוני השרת ברנדור. הצליח → נמחק. כשל רשת → נשאר. כשל ולידציה → נמחק + טוסט.
+- קריאה באוף-ליין חייבת לעבוד: Serwist מקאשר את תגובת ה-RSC האחרונה, כדי שפתיחה קרה תציג את הרשימה.
+- מנוי Realtime אחד בלבד, ב-Provider גלובלי, עם `unsubscribe` ב-cleanup. `router.refresh()` בדיבאונס 150ms.
+
+## סגנון קוד
+- קומפוננטה מעל ~150 שורות → פרק.
+- קבצים `kebab-case.tsx`, קומפוננטות `PascalCase`.
+- לוגיקה עסקית (נרמול עברית, פירוק כמויות, התאמת קטלוג) ב-`lib/`, טהורה וניתנת לבדיקה — לא בתוך קומפוננטות.
+- אין קוד מת, אין קומפוננטות "למקרה שנצטרך", אין הערות שמתארות את המובן מאליו.
+- `console.log` אסור בקוד שנכנס ל-main.
+
+## בדיקות
+- כל פונקציה טהורה ב-`lib/` חייבת בדיקות Vitest, כולל מקרי קצה בעברית: ניקוד, גרשיים, אותיות סופיות, רווחים כפולים, כתיב מלא/חסר.
+- בדיקת שקילות: `normalizeHebrew()` ב-JS מול `normalize_he()` ב-SQL, על אותו מערך קלטים.
+- Playwright ל-3 זרימות: הצטרפות דרך הקישור, הוספה+סימון+Undo, מצב קנייה עד סגירה.
+- לפני כל commit: `pnpm tsc --noEmit && pnpm exec eslint . && pnpm vitest run`.
+
+## Git
+- ענפים: `feat/`, `fix/`, `chore/`. אף פעם לא push ישיר ל-`main`.
+- Conventional Commits, עקבי: `feat: merge quantities instead of duplicating items`.
+- commit בסוף כל שלב בתוכנית העבודה, לא בסוף הפרויקט.
+
+## סודות
+- `SUPABASE_SERVICE_ROLE_KEY`, `APP_SECRET`, `UPSTASH_*` — שרת בלבד, לעולם לא ב-`NEXT_PUBLIC_`.
+- אל תדפיס סודות ללוג. עדכן את `.env.example` בכל פעם שנוסף מפתח.
+- הסוד יושב בנתיב URL, לכן `Referrer-Policy: strict-origin-when-cross-origin` הוא חובה.
