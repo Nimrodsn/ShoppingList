@@ -62,13 +62,15 @@ export default async function HomePage({
           subtitle={`${openItems.length} פריטים ב${activeList?.name ?? "רשימה"}`}
         />
         <PresenceBar />
-        <ListTabs lists={board.lists} activeListId={board.activeListId} />
-        <ForgottenBanner suggestions={forgotten} listId={board.activeListId} />
-        <ListScreen
-          board={board}
-          memberName={member.name}
-          stapleNames={stapleNames}
-        />
+        <main className="flex flex-1 flex-col">
+          <ListTabs lists={board.lists} activeListId={board.activeListId} />
+          <ForgottenBanner suggestions={forgotten} listId={board.activeListId} />
+          <ListScreen
+            board={board}
+            memberName={member.name}
+            stapleNames={stapleNames}
+          />
+        </main>
       </div>
     </RealtimeProvider>
   );

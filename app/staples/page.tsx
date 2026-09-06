@@ -23,11 +23,13 @@ export default async function StaplesPage({
         title="הקנייה השבועית"
         subtitle="הפריטים שחוזרים כל שבוע, בלחיצה אחת"
       />
-      <StaplesScreen
-        staples={staples}
-        categories={board.categories}
-        listId={board.activeListId}
-      />
+      <main className="flex flex-1 flex-col">
+        <StaplesScreen
+          staples={staples}
+          categories={board.categories}
+          listId={board.activeListId}
+        />
+      </main>
     </div>
   );
 }

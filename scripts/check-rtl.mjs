@@ -1,7 +1,13 @@
 /**
  * Fails when a physical (direction-aware) Tailwind class appears in our own code.
  * Mirrors the CI grep from the project rules, but runs on Windows too.
- * `components/ui` is vendored shadcn output and is excluded by design.
+ *
+ * `components/ui` is excluded: shadcn was initialised with `--rtl`, so its output
+ * already uses logical properties (`start-1/2`, `border-e`, `-end-1`) and pairs every
+ * transform with an `rtl:` variant. The physical classes still in there are
+ * direction-semantic by design — `data-[side=left]:left-0` and `slide-in-from-right-2`
+ * describe a physical side, not a reading direction. Any shadcn component added later
+ * has to be held to the same bar by hand.
  */
 import { readdir, readFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";

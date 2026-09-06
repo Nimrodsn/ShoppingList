@@ -137,7 +137,7 @@ export function ShoppingScreen({
         <Progress value={percent} aria-label={`הושלמו ${percent} אחוזים`} />
       </header>
 
-      <div className="flex-1 space-y-4 px-4 pt-4 pb-40">
+      <main className="flex-1 space-y-4 px-4 pt-4 pb-40">
         {grouped.openCount === 0 ? (
           <div className="flex flex-col items-center gap-3 py-16 text-center">
             <span className="text-5xl" aria-hidden>
@@ -178,7 +178,7 @@ export function ShoppingScreen({
             ))}
           </>
         )}
-      </div>
+      </main>
 
       <div className="sticky bottom-0 z-20 border-t bg-background/95 px-4 pt-3 pb-safe backdrop-blur">
         <Button
