@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Reads the pinned version from `packageManager` in package.json.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Types
+        run: pnpm typecheck
+
+      # `next lint` was removed in Next.js 16. ESLint runs on its own flat config.
+      - name: Lint
+        run: pnpm lint
+
+      - name: RTL logical properties
+        run: pnpm check:rtl
+
+      - name: Unit tests
+        run: pnpm test
+
+      # The database-backed tests skip themselves without SUPABASE_DB_URL, and the
+      # build needs no secrets: nothing prerendered touches Supabase.
+      - name: Build
+        run: pnpm build
