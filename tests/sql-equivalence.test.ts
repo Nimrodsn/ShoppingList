@@ -22,7 +22,7 @@ const connected = await (async () => {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (UNREACHABLE.test(message)) {
-      console.info(`Skipping the database tests: ${message}`);
+      console.warn(`Skipping the database tests: ${message}`);
       return false;
     }
     throw error;
