@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getHousehold, getMember } from "@/lib/auth/household";
+import { hasAnyHousehold } from "@/actions/household";
 import { getBoard } from "@/actions/queries";
 import { suggestForgotten } from "@/actions/suggestions";
 import { listStaples } from "@/actions/catalog";
@@ -22,7 +23,12 @@ export default async function HomePage({
 
   // A missing, forged or stale cookie (rotated link) all land on the join screen.
   if (!household) {
-    return <LandingScreen badLink={e === "bad-link"} />;
+    return (
+      <LandingScreen
+        badLink={e === "bad-link"}
+        canCreate={!(await hasAnyHousehold())}
+      />
+    );
   }
 
   const member = await getMember();

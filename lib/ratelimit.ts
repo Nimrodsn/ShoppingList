@@ -44,7 +44,7 @@ function upstashRedis(): Redis | null {
 function createLimiter(
   prefix: string,
   requests: number,
-  window: `${number} m` | `${number} s`,
+  window: `${number} h` | `${number} m` | `${number} s`,
   windowMs: number,
 ): () => Limiter {
   let instance: Limiter | null = null;
@@ -70,6 +70,12 @@ export const joinLimiter = createLimiter("hh:join", 10, "1 m", 60_000);
 
 /** Bulk add is the only endpoint that can create many rows in one call. */
 export const bulkAddLimiter = createLimiter("hh:bulk", 30, "1 m", 60_000);
+
+/**
+ * First-run setup. It already refuses to run once a household exists, but the form is
+ * reachable without a cookie, so it gets a ceiling like every other public entry point.
+ */
+export const setupLimiter = createLimiter("hh:setup", 3, "1 h", 3_600_000);
 
 export function clientIp(headers: Headers): string {
   const forwarded = headers.get("x-forwarded-for");
