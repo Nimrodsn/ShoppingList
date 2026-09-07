@@ -118,14 +118,20 @@ export async function rotateSecrets(): Promise<{ secretSlug: string }> {
  * to create one, so the public setup form closes itself after the first family.
  */
 export async function hasAnyHousehold(): Promise<boolean> {
-  const { count, error } = await supabaseAdmin()
-    .from("households")
-    .select("id", { count: "exact", head: true });
+  try {
+    const { count, error } = await supabaseAdmin()
+      .from("households")
+      .select("id", { count: "exact", head: true });
 
-  // A failed count must not open the setup form on a database that is simply unreachable.
-  if (error) return true;
+    // A failed count must not open the setup form on a database that is merely unreachable.
+    if (error) return true;
 
-  return (count ?? 0) > 0;
+    return (count ?? 0) > 0;
+  } catch {
+    // Missing configuration throws before the query runs. The landing screen is the last
+    // page that should ever crash, so an unanswerable question becomes "a household exists".
+    return true;
+  }
 }
 
 /**
