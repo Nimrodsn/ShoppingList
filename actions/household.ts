@@ -123,11 +123,18 @@ export async function hasAnyHousehold(): Promise<boolean> {
       .from("households")
       .select("id", { count: "exact", head: true });
 
+    // #region agent log
+    fetch('http://127.0.0.1:7819/ingest/ddb11756-cca7-49a3-abc9-419b9db515a5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bc4700'},body:JSON.stringify({sessionId:'bc4700',runId:'run1',hypothesisId:'C,D',location:'actions/household.ts:130',message:'household count query returned',data:{count,branch:error?'error->true':'count',errorMessage:error?.message??null,errorCode:error?.code??null},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+
     // A failed count must not open the setup form on a database that is merely unreachable.
     if (error) return true;
 
     return (count ?? 0) > 0;
-  } catch {
+  } catch (thrown) {
+    // #region agent log
+    fetch('http://127.0.0.1:7819/ingest/ddb11756-cca7-49a3-abc9-419b9db515a5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bc4700'},body:JSON.stringify({sessionId:'bc4700',runId:'run1',hypothesisId:'A,B,E',location:'actions/household.ts:140',message:'household count threw before returning',data:{name:thrown instanceof Error?thrown.name:typeof thrown,message:thrown instanceof Error?thrown.message.slice(0,300):String(thrown).slice(0,300),cause:thrown instanceof Error&&thrown.cause instanceof Error?thrown.cause.message.slice(0,200):null},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     // Missing configuration throws before the query runs. The landing screen is the last
     // page that should ever crash, so an unanswerable question becomes "a household exists".
     return true;
