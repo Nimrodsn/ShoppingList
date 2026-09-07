@@ -3,7 +3,7 @@ create extension if not exists "pg_trgm";
 
 -- ── Hebrew normalization, DB side ──────────────────────────
 -- Must stay logically identical to normalizeHebrew() in lib/hebrew.ts.
--- Both are checked against the same inputs in tests/hebrew-sql-equivalence.test.ts.
+-- Both are checked against the same inputs in tests/sql-equivalence.test.ts.
 create or replace function public.normalize_he(txt text)
 returns text
 language sql immutable strict

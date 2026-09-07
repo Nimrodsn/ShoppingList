@@ -14,6 +14,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "db:bundle": "node scripts/db-bundle.mjs",
     "db:push": "node scripts/db-push.mjs",
     "seed": "node scripts/seed.mjs",
     "create-household": "node scripts/create-household.mjs",

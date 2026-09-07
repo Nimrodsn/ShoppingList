@@ -3,7 +3,7 @@
  *
  * `normalizeHebrew` must stay logically identical to `public.normalize_he(text)` in
  * `supabase/migrations/0001_init.sql`. Changing one means changing the other and
- * updating the equivalence test in `tests/hebrew-sql-equivalence.test.ts`.
+ * updating the equivalence test in `tests/sql-equivalence.test.ts`.
  */
 
 /** Niqqud, cantillation marks and other Hebrew combining points: U+0591–U+05C7. */
