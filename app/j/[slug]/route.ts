@@ -26,11 +26,17 @@ export async function GET(
     return NextResponse.redirect(new URL("/?e=bad-link", request.url));
   }
 
-  const { data: household } = await supabaseAdmin()
+  const { data: household, error } = await supabaseAdmin()
     .from("households")
     .select("id, cookie_generation")
     .eq("secret_slug", parsed.data)
     .maybeSingle();
+
+  // A rejected service key returns no row, exactly like an unknown slug. Without this
+  // line a misconfigured deployment is indistinguishable from a stale family link.
+  if (error) {
+    console.error(`household lookup failed: ${error.message}`);
+  }
 
   if (!household) {
     return NextResponse.redirect(new URL("/?e=bad-link", request.url));
