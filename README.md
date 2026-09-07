@@ -56,6 +56,11 @@ supabase db push          # מריץ את supabase/migrations בסדר
 pnpm gen:types            # types/database.ts — לא לערוך ביד
 ```
 
+בלי ה-CLI (הבינארי שלו הוא הורדה של 59MB שלא תמיד עוברת), `pnpm db:push` עושה את
+אותה עבודה מול `SUPABASE_DB_URL`: מריץ כל מיגרציה שלא הוחלה, בטרנזקציה, ורושם
+אותה ב-`supabase_migrations.schema_migrations` — אותה טבלה שה-CLI קורא, כך שאין
+דריפט בין שתי הדרכים.
+
 `supabase db push` **לא** מריץ `seed.sql`. הקטלוג הגלובלי הוא מיגרציה ממוספרת
 (`0002_seed_catalog.sql`), ולכן הוא נוצר יחד עם הסכימה.
 
@@ -83,6 +88,7 @@ pnpm create-household "הבית של כהן"
 | `pnpm test` | Vitest |
 | `pnpm test:e2e` | Playwright (3 הזרימות המרכזיות) |
 | `pnpm verify` | typecheck + lint + rtl + test — להריץ לפני כל commit |
+| `pnpm db:push` | מריץ את המיגרציות מול `SUPABASE_DB_URL` בלי ה-CLI |
 | `pnpm seed` | seed מקומי מול `SUPABASE_DB_URL` |
 | `pnpm create-household` | יוצר משק בית ומדפיס את הקישור |
 | `pnpm icons` | מייצר מחדש את אייקוני ה-PWA |

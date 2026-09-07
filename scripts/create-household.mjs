@@ -3,7 +3,7 @@
  * secret join link. Run after the first deploy: `pnpm create-household`.
  */
 import { createClient } from "@supabase/supabase-js";
-import "dotenv/config";
+import "./env.mjs";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

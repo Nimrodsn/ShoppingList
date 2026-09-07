@@ -14,6 +14,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "db:push": "node scripts/db-push.mjs",
     "seed": "node scripts/seed.mjs",
     "create-household": "node scripts/create-household.mjs",
     "gen:types": "supabase gen types typescript --linked > types/database.ts"

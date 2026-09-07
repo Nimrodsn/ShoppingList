@@ -4,7 +4,7 @@
  */
 import { readFile } from "node:fs/promises";
 import { Client } from "pg";
-import "dotenv/config";
+import "./env.mjs";
 
 const connectionString = process.env.SUPABASE_DB_URL;
 
