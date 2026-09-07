@@ -1,6 +1,6 @@
 import { config } from "dotenv";
 import { Client } from "pg";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { normalizeHebrew } from "@/lib/hebrew";
 import { HEBREW_INPUTS } from "@/tests/fixtures/hebrew-inputs";
 
@@ -8,17 +8,35 @@ config({ path: [".env.local", ".env"], quiet: true });
 
 const connectionString = process.env.SUPABASE_DB_URL;
 
-/**
- * Runs against a database with the migrations applied (`supabase start` or
- * `supabase db push`). Without `SUPABASE_DB_URL` the whole block is skipped, so the
- * suite still passes on a machine with no database.
- */
-describe.skipIf(!connectionString)("SQL and TypeScript agree", () => {
-  const client = new Client({ connectionString });
+/** Reachability, not correctness: a blocked port or a missing host is not a failure. */
+const UNREACHABLE = /ENOTFOUND|ECONNREFUSED|ETIMEDOUT|EHOSTUNREACH|ENETUNREACH|timeout/i;
 
-  beforeAll(async () => {
+const client = connectionString ? new Client({ connectionString }) : null;
+
+const connected = await (async () => {
+  if (!client) return false;
+
+  try {
     await client.connect();
-  });
+    return true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (UNREACHABLE.test(message)) {
+      console.info(`Skipping the database tests: ${message}`);
+      return false;
+    }
+    throw error;
+  }
+})();
+
+/**
+ * Runs against a database with the migrations applied (`supabase db push`,
+ * `pnpm db:push` or the bundle from `pnpm db:bundle`). Skipped when there is no
+ * `SUPABASE_DB_URL`, and skipped again when the host cannot be reached, so the suite
+ * stays green on a laptop with no database and on a network that blocks port 5432.
+ */
+describe.skipIf(!connected)("SQL and TypeScript agree", () => {
+  if (!client) throw new Error("unreachable: the suite is skipped without a client");
 
   afterAll(async () => {
     await client.end();
