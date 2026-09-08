@@ -26,6 +26,40 @@ export async function GET(
   // #endregion
 }
 
+// #region agent log
+/** Shape of a key, never its value: length, family, JWT role and target project ref. */
+function describeKey(raw: string | undefined): string {
+  if (!raw) return "unset";
+
+  const padding = raw.length - raw.trim().length;
+  const parts = [`length=${raw.length}`, `padding=${padding}`];
+  const key = raw.trim();
+
+  if (key.startsWith("sb_publishable")) {
+    parts.push("family=publishable");
+  } else if (key.startsWith("sb_secret")) {
+    parts.push("family=secret");
+  } else if (key.startsWith("eyJ")) {
+    parts.push("family=jwt");
+    try {
+      const claims: unknown = JSON.parse(
+        Buffer.from(key.split(".")[1], "base64").toString("utf8"),
+      );
+      const bag = typeof claims === "object" && claims !== null
+        ? (claims as Record<string, unknown>)
+        : {};
+      parts.push(`role=${String(bag.role)}`, `ref=${String(bag.ref)}`);
+    } catch {
+      parts.push("role=unparsable");
+    }
+  } else {
+    parts.push("family=unknown");
+  }
+
+  return parts.join(" ");
+}
+// #endregion
+
 async function handle(
   request: NextRequest,
   params: Promise<{ slug: string }>,
@@ -60,7 +94,15 @@ async function handle(
     console.error(`household lookup failed: ${error.message}`);
     // #region agent log
     return new NextResponse(
-      `debug bc4700\nquery error ${error.code}: ${error.message}\nhint: ${error.hint ?? ""}`,
+      [
+        "debug bc4700",
+        `query error ${error.code}: ${error.message}`,
+        `hint: ${error.hint ?? ""}`,
+        `build: ${process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "local"}`,
+        `serviceKey: ${describeKey(process.env.SUPABASE_SERVICE_ROLE_KEY)}`,
+        `anonKey: ${describeKey(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)}`,
+        `url: ${process.env.NEXT_PUBLIC_SUPABASE_URL ?? "unset"}`,
+      ].join("\n"),
       { status: 500, headers: { "Content-Type": "text/plain; charset=utf-8" } },
     );
     // #endregion
