@@ -50,4 +50,3 @@ next-env.d.ts
 
 # debug session logs
 .cursor/debug-*.log
-dep*.html
