@@ -130,6 +130,21 @@ export function ItemRow({ item, onToggle, onDelete, onEdit, large }: ItemRowProp
           >
             <Pencil className="size-4" aria-hidden />
           </button>
+
+          {/* Shopping mode reuses this row with a no-op `onDelete`, so the button stays off there. */}
+          {large ? null : (
+            <button
+              type="button"
+              onClick={() => {
+                tap(15);
+                onDelete(item);
+              }}
+              className="grid size-11 shrink-0 place-items-center rounded-full text-destructive"
+              aria-label={`מחיקת ${item.name}`}
+            >
+              <Trash2 className="size-4" aria-hidden />
+            </button>
+          )}
         </div>
       </motion.div>
     </div>
