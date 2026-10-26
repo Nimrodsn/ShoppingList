@@ -4,6 +4,7 @@ import { getHousehold, getMember } from "@/lib/auth/household";
 import { currentSecretSlug } from "@/actions/household";
 import { getBoard } from "@/actions/queries";
 import { PageHeader } from "@/components/shared/page-header";
+import { BackupCard } from "@/components/settings/backup-card";
 import { CategoryReorder } from "@/components/settings/category-reorder";
 import { IdentityCard } from "@/components/settings/identity-card";
 import { ListsManager } from "@/components/settings/lists-manager";
@@ -40,6 +41,8 @@ export default async function SettingsPage() {
         <ListsManager lists={board.lists} />
         <Separator />
         <CategoryReorder categories={board.categories} />
+        <Separator />
+        <BackupCard />
       </main>
     </div>
   );
