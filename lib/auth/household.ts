@@ -7,6 +7,7 @@ import { signPayload, verifySignature } from "@/lib/auth/signing";
 import {
   HOUSEHOLD_COOKIE,
   HOUSEHOLD_COOKIE_MAX_AGE,
+  HOUSEHOLD_ID_COOKIE,
   IS_SECURE_COOKIE,
   MEMBER_ID_COOKIE,
   MEMBER_NAME_COOKIE,
@@ -99,15 +100,22 @@ export async function setHouseholdCookie(
   householdId: string,
   generation: number,
 ): Promise<void> {
-  (await cookies()).set(
+  const store = await cookies();
+  store.set(
     HOUSEHOLD_COOKIE,
     buildHouseholdCookie(householdId, generation),
     HOUSEHOLD_COOKIE_OPTIONS,
   );
+  store.set(HOUSEHOLD_ID_COOKIE, householdId, {
+    ...HOUSEHOLD_COOKIE_OPTIONS,
+    httpOnly: false,
+  });
 }
 
 export async function clearHouseholdCookie(): Promise<void> {
-  (await cookies()).delete(HOUSEHOLD_COOKIE);
+  const store = await cookies();
+  store.delete(HOUSEHOLD_COOKIE);
+  store.delete(HOUSEHOLD_ID_COOKIE);
 }
 
 export const getMember = cache(async (): Promise<Member | null> => {

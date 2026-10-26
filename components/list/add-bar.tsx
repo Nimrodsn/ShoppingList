@@ -9,10 +9,13 @@ import { Input } from "@/components/ui/input";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useSpeechInput } from "@/hooks/use-speech-input";
 import { findOpenByNorm, optimisticId, type BoardMutation } from "@/lib/board";
+import type { AddItemResult, BulkAddResult } from "@/actions/items";
 import { normalizeHebrew, parseQuantity, splitBulkInput } from "@/lib/hebrew";
 import { tap } from "@/lib/haptics";
 import { useOfflineQueue } from "@/lib/offline/provider";
 import type { QueuedMutation } from "@/lib/offline/queue";
+
+type AddMutation = Extract<QueuedMutation, { kind: "add" }>;
 import type { BoardItem, CategoryRef } from "@/types/board";
 
 const OFFLINE_NOTICE = "אין חיבור. נשלח את זה ברגע שהוא יחזור.";
@@ -65,6 +68,7 @@ export function AddBar({
 
   /** Mirrors the server's merge rule, so the row on screen matches what lands in the DB. */
   function buildMutation(
+    clientId: string,
     name: string,
     quantity: number | null,
     unit: string | null,
@@ -90,7 +94,7 @@ export function AddBar({
     return {
       type: "add",
       item: {
-        id: optimisticId(),
+        id: optimisticId(clientId),
         name,
         quantity,
         unit: unit ?? suggestion?.defaultUnit ?? null,
@@ -111,14 +115,15 @@ export function AddBar({
     name: string,
     quantity: number | null,
     unit: string | null,
-  ): QueuedMutation {
+  ): AddMutation {
     const clientId = crypto.randomUUID();
 
     return {
       clientId,
+      createdAt: new Date().toISOString(),
       kind: "add",
       input: { clientId, listId, name, quantity, unit },
-      optimistic: [buildMutation(name, quantity, unit)],
+      optimistic: [buildMutation(clientId, name, quantity, unit)],
     };
   }
 
@@ -129,15 +134,24 @@ export function AddBar({
 
     mutate(mutation);
 
-    const result = await queue.run(entry);
+    const run = await queue.run(entry);
 
-    if (result === "failed") {
+    if (run.status === "failed") {
       toast.error("לא הצלחנו להוסיף. נסו שוב.");
       return;
     }
 
-    if (result === "queued") {
+    if (run.status === "queued") {
       toast.info(OFFLINE_NOTICE);
+      return;
+    }
+
+    // The server's own outcome, not the optimistic guess: a merge that raced another
+    // device still announces the quantity that actually landed.
+    const outcome = run.result as AddItemResult | undefined;
+
+    if (outcome?.status === "merged") {
+      toast.success(`עדכנתי ל-${outcome.quantity} ${outcome.name}`);
       return;
     }
 
@@ -161,34 +175,57 @@ export function AddBar({
     for (const entry of entries) mutate(entry.optimistic[0]);
 
     const bulkId = crypto.randomUUID();
-    const result = await queue.run({
+    const run = await queue.run({
       clientId: bulkId,
+      createdAt: new Date().toISOString(),
       kind: "bulkAdd",
-      input: { listId, raw: text },
+      input: {
+        listId,
+        items: entries.map((entry) => ({
+          clientId: entry.clientId,
+          name: entry.input.name,
+          quantity: entry.input.quantity ?? null,
+          unit: entry.input.unit ?? null,
+        })),
+      },
       optimistic: entries.flatMap((entry) => entry.optimistic),
     });
 
-    if (result === "failed") {
+    if (run.status === "failed") {
       toast.error("לא הצלחנו להוסיף. נסו שוב.");
       return;
     }
 
-    if (result === "queued") {
-      // One bulk statement is not idempotent on the server, so a retry has to go
-      // item by item, each with its own clientId.
+    if (run.status === "queued") {
+      // The retry goes item by item with the same clientIds the server just saw,
+      // so lines that already landed replay as no-ops instead of doubling.
       await queue.replace(bulkId, entries);
       toast.info(OFFLINE_NOTICE);
       return;
     }
 
-    const merged = entries.filter(
-      (entry) => entry.optimistic[0].type === "mergeQuantity",
-    ).length;
-    const added = entries.length - merged;
+    // Real counts from the server, not the optimistic mirror.
+    const summary = run.result as BulkAddResult | undefined;
+    if (!summary) return;
 
-    const parts = [`נוספו ${added}`];
-    if (merged > 0) parts.push(`אוחדו ${merged}`);
+    const parts = [`נוספו ${summary.added}`];
+    if (summary.merged > 0) parts.push(`אוחדו ${summary.merged}`);
     toast.success(parts.join(", "));
+
+    if (summary.failed > 0) {
+      // The failed lines go back into the box, so a fix and a retry is one tap.
+      const failedChunks = chunks.filter((chunk) => {
+        const parsed = parseQuantity(chunk);
+        return summary.failedNames.includes(parsed.name || chunk.trim());
+      });
+      if (failedChunks.length > 0) {
+        setValue(failedChunks.join("\n"));
+        inputRef.current?.focus();
+      }
+      toast.error(
+        `${summary.failed} שורות לא נוספו: ${summary.failedNames.join(", ")}`,
+      );
+    }
   }
 
   function submit(rawText: string) {

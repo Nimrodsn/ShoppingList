@@ -4,7 +4,11 @@ import {
   buildHouseholdCookie,
   HOUSEHOLD_COOKIE_OPTIONS,
 } from "@/lib/auth/household";
-import { HOUSEHOLD_COOKIE, MEMBER_NAME_COOKIE } from "@/lib/auth/constants";
+import {
+  HOUSEHOLD_COOKIE,
+  HOUSEHOLD_ID_COOKIE,
+  MEMBER_NAME_COOKIE,
+} from "@/lib/auth/constants";
 import { clientIp, joinLimiter } from "@/lib/ratelimit";
 import { SecretSlugSchema } from "@/lib/schemas";
 
@@ -52,6 +56,11 @@ export async function GET(
     buildHouseholdCookie(household.id, household.cookie_generation),
     HOUSEHOLD_COOKIE_OPTIONS,
   );
+  // Readable, httpOnly=false on purpose: the offline queue scopes its entries with it.
+  response.cookies.set(HOUSEHOLD_ID_COOKIE, household.id, {
+    ...HOUSEHOLD_COOKIE_OPTIONS,
+    httpOnly: false,
+  });
 
   return response;
 }

@@ -16,9 +16,10 @@ import {
   applyMutations,
   groupItems,
   isOptimisticId,
+  optimisticClientId,
   type BoardMutation,
 } from "@/lib/board";
-import { NOT_SYNCED_YET, useOfflineQueue } from "@/lib/offline/provider";
+import { useOfflineQueue } from "@/lib/offline/provider";
 import type { Board, BoardItem } from "@/types/board";
 
 const UNDO_DURATION = 6000;
@@ -53,12 +54,13 @@ export function ListScreen({
     [items, board.categories],
   );
 
-  function handleToggle(item: BoardItem) {
-    if (isOptimisticId(item.id)) {
-      toast.info(NOT_SYNCED_YET);
-      return;
-    }
+  /** The server id, or the add's clientId for a row that has not synced yet. */
+  function itemRef(item: BoardItem): { itemId: string } | { itemClientId: string } {
+    const clientId = optimisticClientId(item.id);
+    return clientId ? { itemClientId: clientId } : { itemId: item.id };
+  }
 
+  function handleToggle(item: BoardItem) {
     const isChecked = !item.isChecked;
     const clientId = crypto.randomUUID();
     const mutation: BoardMutation = {
@@ -71,19 +73,20 @@ export function ListScreen({
     startTransition(async () => {
       mutate(mutation);
 
-      const result = await queue.run({
+      const run = await queue.run({
         clientId,
+        createdAt: new Date().toISOString(),
         kind: "toggle",
-        input: { clientId, itemId: item.id, isChecked },
+        input: { clientId, ...itemRef(item), isChecked },
         optimistic: [mutation],
       });
 
-      if (result === "failed") {
+      if (run.status === "failed") {
         toast.error("לא הצלחנו לעדכן את הפריט.");
         return;
       }
 
-      if (result === "queued" || !isChecked) return;
+      if (run.status === "queued" || !isChecked) return;
 
       // Undo targets the item id, so it works even when another open item shares the name.
       toast.success(`${item.name} נלקח`, {
@@ -103,8 +106,9 @@ export function ListScreen({
               mutate(undo);
               await queue.run({
                 clientId: undoId,
+                createdAt: new Date().toISOString(),
                 kind: "toggle",
-                input: { clientId: undoId, itemId: item.id, isChecked: false },
+                input: { clientId: undoId, ...itemRef(item), isChecked: false },
                 optimistic: [undo],
               });
             });
@@ -125,14 +129,15 @@ export function ListScreen({
         return;
       }
 
-      const result = await queue.run({
+      const run = await queue.run({
         clientId: crypto.randomUUID(),
+        createdAt: new Date().toISOString(),
         kind: "delete",
-        input: { itemId: item.id },
+        input: itemRef(item),
         optimistic: [{ type: "delete", itemId: item.id }],
       });
 
-      if (result === "failed") {
+      if (run.status === "failed") {
         toast.error("לא הצלחנו למחוק את הפריט.");
         return;
       }
@@ -148,6 +153,7 @@ export function ListScreen({
               mutate({ type: "add", item });
               await queue.run({
                 clientId: restoreId,
+                createdAt: new Date().toISOString(),
                 kind: "restore",
                 input: {
                   clientId: restoreId,

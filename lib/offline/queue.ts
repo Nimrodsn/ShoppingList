@@ -1,4 +1,4 @@
-import { createStore, get, set, type UseStore } from "idb-keyval";
+import { createStore, del, get, keys, set, type UseStore } from "idb-keyval";
 import type { z } from "zod";
 import type { BoardMutation } from "@/lib/board";
 import type {
@@ -14,9 +14,13 @@ import type {
  * One logged mutation: the arguments to replay against the server plus the board
  * mutations that keep it on screen until it lands. `clientId` is both the log key
  * and the server-side idempotency key, so a retry can never double-apply.
+ * `householdId` scopes the entry to the family that made it: joining or leaving a
+ * household purges the other family's entries instead of replaying them there.
  */
 export type QueuedMutation = {
   clientId: string;
+  createdAt: string;
+  householdId?: string;
   optimistic: BoardMutation[];
 } & (
   | { kind: "add"; input: z.input<typeof AddItemSchema> }
@@ -27,9 +31,19 @@ export type QueuedMutation = {
   | { kind: "delete"; input: z.input<typeof DeleteItemSchema> }
 );
 
+/** IndexedDB said no (private mode, storage denied, quota). Surfaced, never swallowed. */
+export class QueueStorageError extends Error {
+  constructor(cause: unknown) {
+    super("queue storage unavailable");
+    this.name = "QueueStorageError";
+    this.cause = cause;
+  }
+}
+
 const DB_NAME = "our-basket";
 const STORE_NAME = "mutations";
-const QUEUE_KEY = "queue";
+const KEY_PREFIX = "mutation:";
+const CHANNEL_NAME = "our-basket-queue";
 
 let store: UseStore | null = null;
 
@@ -39,7 +53,9 @@ function queueStore(): UseStore {
   return store;
 }
 
-// Every write is a read-modify-write of one array, so writes run strictly in order.
+// Writes run strictly in order inside this tab. Across tabs there is no shared
+// read-modify-write anymore — each entry is its own key — and the broadcast
+// channel tells the other tabs to reload after every change.
 let tail: Promise<unknown> = Promise.resolve();
 
 function serialize<T>(task: () => Promise<T>): Promise<T> {
@@ -48,36 +64,85 @@ function serialize<T>(task: () => Promise<T>): Promise<T> {
   return next;
 }
 
-export async function readQueue(): Promise<QueuedMutation[]> {
+function notifyChanged(): void {
+  if (typeof BroadcastChannel === "undefined") return;
   try {
-    return (await get<QueuedMutation[]>(QUEUE_KEY, queueStore())) ?? [];
+    new BroadcastChannel(CHANNEL_NAME).postMessage("changed");
   } catch {
-    // No IndexedDB (private mode, storage denied): the online path still works.
-    return [];
+    // A closed or blocked channel is cosmetic only: this tab's own state is fine.
   }
 }
 
-async function write(entries: QueuedMutation[]): Promise<void> {
+/** Fires when any tab (including this one) changes the log. */
+export function onQueueChanged(listener: () => void): () => void {
+  if (typeof BroadcastChannel === "undefined") return () => undefined;
+
+  const channel = new BroadcastChannel(CHANNEL_NAME);
+  channel.onmessage = () => listener();
+  return () => channel.close();
+}
+
+export async function readQueue(): Promise<QueuedMutation[]> {
   try {
-    await set(QUEUE_KEY, entries, queueStore());
-  } catch {
-    return;
+    const allKeys = await keys(queueStore());
+    const entryKeys = allKeys.filter(
+      (key): key is string => typeof key === "string" && key.startsWith(KEY_PREFIX),
+    );
+    const entries = await Promise.all(
+      entryKeys.map((key) => get<QueuedMutation>(key, queueStore())),
+    );
+    return entries
+      .filter((entry): entry is QueuedMutation => entry !== undefined)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  } catch (error) {
+    throw new QueueStorageError(error);
   }
 }
 
 export function appendToQueue(entries: QueuedMutation[]): Promise<void> {
   return serialize(async () => {
-    const current = await readQueue();
-    const known = new Set(current.map((entry) => entry.clientId));
-    const added = entries.filter((entry) => !known.has(entry.clientId));
-    if (added.length === 0) return;
-    await write([...current, ...added]);
+    for (const entry of entries) {
+      try {
+        // `set` is a no-op overwrite when the clientId is already logged, which is
+        // exactly the dedupe the old known-set filter did, one entry at a time.
+        await set(`${KEY_PREFIX}${entry.clientId}`, entry, queueStore());
+      } catch (error) {
+        throw new QueueStorageError(error);
+      }
+    }
+    notifyChanged();
   });
 }
 
 export function removeFromQueue(clientId: string): Promise<void> {
   return serialize(async () => {
-    const current = await readQueue();
-    await write(current.filter((entry) => entry.clientId !== clientId));
+    try {
+      await del(`${KEY_PREFIX}${clientId}`, queueStore());
+    } catch (error) {
+      throw new QueueStorageError(error);
+    }
+    notifyChanged();
   });
+}
+
+/**
+ * Drops every entry that belongs to another household — or every tagged entry when
+ * there is no current household at all (the device left). Untagged entries written
+ * before this scoping existed are kept; they fail or land exactly as they used to.
+ */
+export async function purgeOtherHouseholds(
+  currentHouseholdId: string | null,
+): Promise<void> {
+  try {
+    const entries = await readQueue();
+    const stale = entries.filter(
+      (entry) => entry.householdId !== undefined && entry.householdId !== currentHouseholdId,
+    );
+    for (const entry of stale) {
+      await removeFromQueue(entry.clientId);
+    }
+  } catch {
+    // A purge miss is safe: the entries simply replay against the server, which
+    // rejects anything for a household this device no longer belongs to.
+  }
 }

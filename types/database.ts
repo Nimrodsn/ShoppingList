@@ -309,6 +309,38 @@ export type Database = {
           },
         ];
       };
+      applied_operations: {
+        Row: {
+          client_id: string;
+          household_id: string;
+          kind: string;
+          outcome: Json;
+          created_at: string;
+        };
+        Insert: {
+          client_id: string;
+          household_id: string;
+          kind: string;
+          outcome: Json;
+          created_at?: string;
+        };
+        Update: {
+          client_id?: string;
+          household_id?: string;
+          kind?: string;
+          outcome?: Json;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "applied_operations_household_id_fkey";
+            columns: ["household_id"];
+            isOneToOne: false;
+            referencedRelation: "households";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       default_categories: {
         Row: {
           key: string;
@@ -381,6 +413,29 @@ export type Database = {
       bump_catalog_usage: {
         Args: { p_household_id: string; p_names: string[] };
         Returns: undefined;
+      };
+      apply_add_item: {
+        Args: {
+          p_client_id: string;
+          p_household_id: string;
+          p_list_id: string;
+          p_category_id: string | null;
+          p_name: string;
+          p_quantity: number | null;
+          p_unit: string | null;
+          p_note: string | null;
+          p_is_urgent: boolean;
+          p_added_by: string | null;
+        };
+        Returns: Json;
+      };
+      close_trip: {
+        Args: {
+          p_household_id: string;
+          p_list_id: string;
+          p_purchased_by: string | null;
+        };
+        Returns: Json;
       };
       suggest_forgotten: {
         Args: { p_household_id: string; p_limit?: number };

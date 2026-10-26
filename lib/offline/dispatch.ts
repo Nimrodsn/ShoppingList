@@ -8,26 +8,24 @@ import {
 } from "@/actions/items";
 import type { QueuedMutation } from "@/lib/offline/queue";
 
-/** Replays one logged mutation. Throws so the caller can tell a retry from a rejection. */
-export async function sendMutation(entry: QueuedMutation): Promise<void> {
+/**
+ * Replays one logged mutation and hands back the server's result, so callers can
+ * show real counts instead of guessing from optimistic state. Throws so the caller
+ * can tell a retry from a rejection.
+ */
+export async function sendMutation(entry: QueuedMutation): Promise<unknown> {
   switch (entry.kind) {
     case "add":
-      await addItem(entry.input);
-      return;
+      return await addItem(entry.input);
     case "bulkAdd":
-      await bulkAdd(entry.input);
-      return;
+      return await bulkAdd(entry.input);
     case "restore":
-      await restoreItem(entry.input);
-      return;
+      return await restoreItem(entry.input);
     case "toggle":
-      await toggleItem(entry.input);
-      return;
+      return await toggleItem(entry.input);
     case "update":
-      await updateItem(entry.input);
-      return;
+      return await updateItem(entry.input);
     case "delete":
-      await deleteItem(entry.input);
-      return;
+      return await deleteItem(entry.input);
   }
 }

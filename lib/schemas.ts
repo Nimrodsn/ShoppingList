@@ -33,28 +33,53 @@ export const AddItemSchema = z.object({
   categoryId: UuidSchema.nullable().default(null),
 });
 
+/**
+ * The client parses the paste and sends one stable clientId per line, so a retry —
+ * the offline queue's or an invisible network hiccup's — replays the exact same ids
+ * and the operation ledger turns them into no-ops.
+ */
+export const BulkAddItemSchema = z.object({
+  clientId: UuidSchema,
+  name: ItemNameSchema,
+  quantity: QuantitySchema.default(null),
+  unit: UnitSchema.default(null),
+});
+
 export const BulkAddSchema = z.object({
   listId: UuidSchema,
-  raw: z.string().trim().min(1).max(2000),
+  items: z.array(BulkAddItemSchema).min(1).max(200),
 });
 
-export const ToggleItemSchema = z.object({
-  clientId: UuidSchema,
-  itemId: UuidSchema,
-  isChecked: z.boolean(),
-});
+/**
+ * `itemId` for a synced row, `itemClientId` for one that only exists in the offline
+ * log: the server resolves the add's clientId to the real row once the add replays.
+ */
+export const ItemRefSchema = z
+  .object({
+    itemId: UuidSchema.optional(),
+    itemClientId: UuidSchema.optional(),
+  })
+  .refine((ref) => ref.itemId !== undefined || ref.itemClientId !== undefined, {
+    message: "חסר מזהה פריט",
+  });
+
+export const ToggleItemSchema = z
+  .object({
+    clientId: UuidSchema,
+    isChecked: z.boolean(),
+  })
+  .and(ItemRefSchema);
 
 export const UpdateItemSchema = z.object({
-  itemId: UuidSchema,
   name: ItemNameSchema.optional(),
   quantity: QuantitySchema.optional(),
   unit: UnitSchema.optional(),
   note: NoteSchema.optional(),
   isUrgent: z.boolean().optional(),
   categoryId: UuidSchema.nullable().optional(),
-});
+}).and(ItemRefSchema);
 
-export const DeleteItemSchema = z.object({ itemId: UuidSchema });
+export const DeleteItemSchema = ItemRefSchema;
 
 export const RestoreItemSchema = z.object({
   clientId: UuidSchema,

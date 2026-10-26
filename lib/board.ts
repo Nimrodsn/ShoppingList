@@ -60,13 +60,26 @@ export function groupItems(
 
 const OPTIMISTIC_ID_PREFIX = "optimistic-";
 
-/** Marks a row that only exists on this device until the server hands back a real id. */
-export function optimisticId(): string {
-  return `${OPTIMISTIC_ID_PREFIX}${crypto.randomUUID()}`;
+/**
+ * Marks a row that only exists on this device until the server hands back a real id.
+ * The add's clientId is embedded, so a later mutation on this row can name it through
+ * the `itemClientId` channel: the server resolves the add once it replays.
+ */
+export function optimisticId(clientId: string): string {
+  return `${OPTIMISTIC_ID_PREFIX}${clientId}`;
 }
 
 export function isOptimisticId(id: string): boolean {
   return id.startsWith(OPTIMISTIC_ID_PREFIX);
+}
+
+/** The add's clientId behind an optimistic row id, or null for a synced row. */
+export function optimisticClientId(id: string): string | null {
+  if (!isOptimisticId(id)) return null;
+  const clientId = id.slice(OPTIMISTIC_ID_PREFIX.length);
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clientId)
+    ? clientId
+    : null;
 }
 
 export type BoardMutation =

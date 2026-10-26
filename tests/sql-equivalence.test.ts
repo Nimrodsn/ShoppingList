@@ -36,14 +36,17 @@ const connected = await (async () => {
  * stays green on a laptop with no database and on a network that blocks port 5432.
  */
 describe.skipIf(!connected)("SQL and TypeScript agree", () => {
-  if (!client) throw new Error("unreachable: the suite is skipped without a client");
+  // `describe.skipIf` still evaluates the body during suite registration, so this
+  // must not throw when there is no database. Tests below use `db()`, which only
+  // ever runs inside the skipped suite when a client exists.
+  const db = (): Client => client as Client;
 
   afterAll(async () => {
-    await client.end();
+    await client?.end();
   });
 
   it("normalize_he matches normalizeHebrew across the corpus", async () => {
-    const { rows } = await client.query<{ input: string; normalized: string }>(
+    const { rows } = await db().query<{ input: string; normalized: string }>(
       "select input, public.normalize_he(input) as normalized from unnest($1::text[]) as input",
       [[...HEBREW_INPUTS]],
     );
@@ -58,7 +61,7 @@ describe.skipIf(!connected)("SQL and TypeScript agree", () => {
   });
 
   it("catalog name_norm columns match the TypeScript normalizer", async () => {
-    const { rows } = await client.query<{ name: string; name_norm: string }>(
+    const { rows } = await db().query<{ name: string; name_norm: string }>(
       "select name, name_norm from public.catalog_items where household_id is null limit 500",
     );
 
@@ -70,27 +73,31 @@ describe.skipIf(!connected)("SQL and TypeScript agree", () => {
   });
 
   it("match_catalog returns the best matches first", async () => {
-    const { rows } = await client.query<{ name: string; score: number }>(
+    const { rows } = await db().query<{ name: string; score: number }>(
       "select name, score from public.match_catalog($1, $2, 8)",
       [crypto.randomUUID(), "חלב"],
     );
 
     expect(rows.length).toBeGreaterThan(0);
-    expect(rows[0].name).toBe("חלב");
+    // Every seeded "חלב …" product prefix-matches at score 100, so the leader must
+    // be one of them and the whole list must come back score-sorted.
+    expect(rows[0].score).toBe(100);
+    expect(normalizeHebrew(rows[0].name).startsWith(normalizeHebrew("חלב"))).toBe(true);
     expect([...rows].sort((a, b) => b.score - a.score)).toEqual(rows);
   });
 
   it("match_catalog finds a product through an alias", async () => {
-    const { rows } = await client.query<{ name: string }>(
+    const { rows } = await db().query<{ name: string }>(
       "select name from public.match_catalog($1, $2, 3)",
       [crypto.randomUUID(), "קוטג"],
     );
 
-    expect(rows.map((row) => row.name)).toContain("קוטג׳");
+    // The seed spells the product with a geresh and a fat percentage.
+    expect(rows.map((row) => row.name)).toContain("קוטג׳ 5%");
   });
 
   it("match_catalog ignores an empty query", async () => {
-    const { rows } = await client.query(
+    const { rows } = await db().query(
       "select * from public.match_catalog($1, $2, 8)",
       [crypto.randomUUID(), "   "],
     );

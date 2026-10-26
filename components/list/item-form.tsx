@@ -11,8 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { isOptimisticId } from "@/lib/board";
-import { NOT_SYNCED_YET, useOfflineQueue } from "@/lib/offline/provider";
+import { optimisticClientId } from "@/lib/board";
+import { useOfflineQueue } from "@/lib/offline/provider";
 
 export function ItemForm({
   item,
@@ -40,11 +40,6 @@ export function ItemForm({
   const [isStaple, setIsStaple] = useState(isKnownStaple);
 
   function save() {
-    if (isOptimisticId(item.id)) {
-      toast.info(NOT_SYNCED_YET);
-      return;
-    }
-
     const parsedQuantity = quantity.trim() === "" ? null : Number(quantity);
     const categoryChanged = categoryId !== (item.categoryId ?? "");
     const trimmedName = name.trim();
@@ -61,21 +56,25 @@ export function ItemForm({
       categoryId: categoryId === "" ? null : categoryId,
     };
 
+    const addClientId = optimisticClientId(item.id);
+    const ref = addClientId ? { itemClientId: addClientId } : { itemId: item.id };
+
     startTransition(async () => {
-      const result = await queue.run({
+      const run = await queue.run({
         clientId: crypto.randomUUID(),
+        createdAt: new Date().toISOString(),
         kind: "update",
-        input: { itemId: item.id, ...patch },
+        input: { ...ref, ...patch },
         optimistic: [{ type: "update", itemId: item.id, patch }],
       });
 
-      if (result === "failed") {
+      if (run.status === "failed") {
         toast.error("לא הצלחנו לשמור את השינויים.");
         return;
       }
 
       // A manual category correction teaches the household catalog for next time.
-      if (result === "sent" && categoryChanged && categoryId) {
+      if (run.status === "sent" && categoryChanged && categoryId) {
         await teachCategory(trimmedName, categoryId);
       }
 

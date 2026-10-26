@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getMember, requireHousehold } from "@/lib/auth/household";
-import { normalizeHebrew, parseQuantity, splitBulkInput } from "@/lib/hebrew";
 import { bulkAddLimiter } from "@/lib/ratelimit";
 import {
   AddItemSchema,
@@ -14,19 +13,26 @@ import {
   UpdateItemSchema,
 } from "@/lib/schemas";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/types/database";
-
-const UNIQUE_VIOLATION = "23505";
+import type { Database, Json } from "@/types/database";
 
 export type AddItemResult =
   | { status: "added"; itemId: string; name: string }
   | { status: "merged"; itemId: string; name: string; quantity: number }
   | { status: "duplicate" };
 
+export type BulkAddItemOutcome = {
+  clientId: string;
+  name: string;
+  status: "added" | "merged" | "failed";
+};
+
 export type BulkAddResult = {
   added: number;
   merged: number;
   failed: number;
+  /** Names the server could not add, so the client can hand them back for a retry. */
+  failedNames: string[];
+  outcomes: BulkAddItemOutcome[];
 };
 
 type Client = SupabaseClient<Database>;
@@ -88,9 +94,40 @@ async function resolveCategoryId(
   };
 }
 
+/** The jsonb outcome of public.apply_add_item, validated field by field. */
+function parseAddOutcome(outcome: Json): AddItemResult {
+  if (typeof outcome !== "object" || outcome === null || Array.isArray(outcome)) {
+    throw new Error("לא הצלחנו להוסיף את הפריט");
+  }
+
+  const status = outcome.status;
+
+  if (status === "duplicate") return { status: "duplicate" };
+
+  if (status === "added" || status === "merged") {
+    const itemId = outcome.itemId;
+    const name = outcome.name;
+    if (typeof itemId !== "string" || typeof name !== "string") {
+      throw new Error("לא הצלחנו להוסיף את הפריט");
+    }
+    if (status === "added") return { status, itemId, name };
+
+    const quantity = outcome.quantity;
+    if (typeof quantity !== "number") {
+      throw new Error("לא הצלחנו להוסיף את הפריט");
+    }
+    return { status, itemId, name, quantity };
+  }
+
+  throw new Error("לא הצלחנו להוסיף את הפריט");
+}
+
 /**
- * Duplicate prevention lives here, not in a unique index. A unique index on open
- * items would break Undo and make any bulk add fail wholesale on one repeat.
+ * Duplicate prevention and the quantity merge live in SQL (public.apply_add_item),
+ * where one locked statement replaces what used to be a read-then-write pair: a
+ * replayed clientId is a no-op, and two simultaneous adds of the same product add
+ * up instead of losing each other. A unique index on open items stays wrong for
+ * the same reason as before: it would break Undo and fail whole bulk adds.
  */
 async function addOne(
   supabase: Client,
@@ -107,44 +144,6 @@ async function addOne(
     categoryId: string | null;
   },
 ): Promise<AddItemResult> {
-  const alreadyApplied = await supabase
-    .from("items")
-    .select("id")
-    .eq("client_id", input.clientId)
-    .maybeSingle();
-
-  if (alreadyApplied.data) return { status: "duplicate" };
-
-  const nameNorm = normalizeHebrew(input.name);
-
-  const { data: open } = await supabase
-    .from("items")
-    .select("id, name, quantity")
-    .eq("household_id", householdId)
-    .eq("list_id", input.listId)
-    .eq("name_norm", nameNorm)
-    .eq("is_checked", false)
-    .limit(1)
-    .maybeSingle();
-
-  if (open) {
-    const nextQuantity = (open.quantity ?? 1) + (input.quantity ?? 1);
-    const { error } = await supabase
-      .from("items")
-      .update({ quantity: nextQuantity, is_urgent: input.isUrgent || undefined })
-      .eq("household_id", householdId)
-      .eq("id", open.id);
-
-    if (error) throw new Error("לא הצלחנו לעדכן את הכמות");
-
-    return {
-      status: "merged",
-      itemId: open.id,
-      name: open.name,
-      quantity: nextQuantity,
-    };
-  }
-
   const { categoryId, defaultUnit } = await resolveCategoryId(
     supabase,
     householdId,
@@ -152,29 +151,46 @@ async function addOne(
     input.categoryId,
   );
 
-  const { data: inserted, error } = await supabase
+  const { data, error } = await supabase.rpc("apply_add_item", {
+    p_client_id: input.clientId,
+    p_household_id: householdId,
+    p_list_id: input.listId,
+    p_category_id: categoryId,
+    p_name: input.name,
+    p_quantity: input.quantity,
+    p_unit: input.unit ?? defaultUnit,
+    p_note: input.note,
+    p_is_urgent: input.isUrgent,
+    p_added_by: memberName,
+  });
+
+  if (error) throw new Error("לא הצלחנו להוסיף את הפריט");
+
+  return parseAddOutcome(data);
+}
+
+/**
+ * Turns an ItemRef into a real row id. `itemClientId` belongs to an add that only
+ * existed in the offline log when the mutation was queued; once the add replayed,
+ * its row carries that clientId.
+ */
+async function resolveItemId(
+  supabase: Client,
+  householdId: string,
+  ref: { itemId?: string; itemClientId?: string },
+): Promise<string> {
+  if (ref.itemId) return ref.itemId;
+  if (!ref.itemClientId) throw new Error("חסר מזהה פריט");
+
+  const { data } = await supabase
     .from("items")
-    .insert({
-      client_id: input.clientId,
-      household_id: householdId,
-      list_id: input.listId,
-      category_id: categoryId,
-      name: input.name,
-      quantity: input.quantity,
-      unit: input.unit ?? defaultUnit,
-      note: input.note,
-      is_urgent: input.isUrgent,
-      added_by: memberName,
-    })
     .select("id")
-    .single();
+    .eq("household_id", householdId)
+    .eq("client_id", ref.itemClientId)
+    .maybeSingle();
 
-  if (error) {
-    if (error.code === UNIQUE_VIOLATION) return { status: "duplicate" };
-    throw new Error("לא הצלחנו להוסיף את הפריט");
-  }
-
-  return { status: "added", itemId: inserted.id, name: input.name };
+  if (!data) throw new Error("הפריט לא נמצא");
+  return data.id;
 }
 
 export async function addItem(raw: unknown): Promise<AddItemResult> {
@@ -190,7 +206,11 @@ export async function addItem(raw: unknown): Promise<AddItemResult> {
   return result;
 }
 
-/** Processed item by item, so one repeated product never fails the whole paste. */
+/**
+ * Processed item by item, so one bad line never fails the whole paste. Every line
+ * arrives with the clientId the client chose for it, which is what makes a retry of
+ * the whole batch safe: lines that already landed come back as duplicates.
+ */
 export async function bulkAdd(raw: unknown): Promise<BulkAddResult> {
   const householdId = await requireHousehold();
   const input = BulkAddSchema.parse(raw);
@@ -202,31 +222,47 @@ export async function bulkAdd(raw: unknown): Promise<BulkAddResult> {
   await assertListBelongsToHousehold(supabase, householdId, input.listId);
   const member = await getMember();
 
-  const summary: BulkAddResult = { added: 0, merged: 0, failed: 0 };
+  const summary: BulkAddResult = {
+    added: 0,
+    merged: 0,
+    failed: 0,
+    failedNames: [],
+    outcomes: [],
+  };
 
-  for (const chunk of splitBulkInput(input.raw)) {
-    const { name, quantity, unit } = parseQuantity(chunk);
+  for (const line of input.items) {
+    const name = line.name.trim();
     if (name.length === 0 || name.length > 80) {
       summary.failed += 1;
+      summary.failedNames.push(line.name);
+      summary.outcomes.push({ clientId: line.clientId, name: line.name, status: "failed" });
       continue;
     }
 
     try {
       const result = await addOne(supabase, householdId, member?.name ?? null, {
-        clientId: crypto.randomUUID(),
+        clientId: line.clientId,
         listId: input.listId,
         name,
-        quantity,
-        unit,
+        quantity: line.quantity,
+        unit: line.unit,
         note: null,
         isUrgent: false,
         categoryId: null,
       });
 
-      if (result.status === "merged") summary.merged += 1;
-      else if (result.status === "added") summary.added += 1;
+      if (result.status === "merged") {
+        summary.merged += 1;
+        summary.outcomes.push({ clientId: line.clientId, name, status: "merged" });
+      } else if (result.status === "added") {
+        summary.added += 1;
+        summary.outcomes.push({ clientId: line.clientId, name, status: "added" });
+      }
+      // "duplicate" is a replay of an already-applied line: nothing to count.
     } catch {
       summary.failed += 1;
+      summary.failedNames.push(name);
+      summary.outcomes.push({ clientId: line.clientId, name, status: "failed" });
     }
   }
 
@@ -240,6 +276,8 @@ export async function toggleItem(raw: unknown): Promise<void> {
   const supabase = supabaseAdmin();
   const member = await getMember();
 
+  const itemId = await resolveItemId(supabase, householdId, input);
+
   const { error } = await supabase
     .from("items")
     .update({
@@ -248,7 +286,7 @@ export async function toggleItem(raw: unknown): Promise<void> {
       checked_at: input.isChecked ? new Date().toISOString() : null,
     })
     .eq("household_id", householdId)
-    .eq("id", input.itemId);
+    .eq("id", itemId);
 
   if (error) throw new Error("לא הצלחנו לעדכן את הפריט");
 
@@ -270,6 +308,8 @@ export async function updateItem(raw: unknown): Promise<void> {
     if (!data) throw new Error("הקטגוריה לא נמצאה");
   }
 
+  const itemId = await resolveItemId(supabase, householdId, input);
+
   const { error } = await supabase
     .from("items")
     .update({
@@ -281,7 +321,7 @@ export async function updateItem(raw: unknown): Promise<void> {
       ...(input.categoryId !== undefined ? { category_id: input.categoryId } : {}),
     })
     .eq("household_id", householdId)
-    .eq("id", input.itemId);
+    .eq("id", itemId);
 
   if (error) throw new Error("לא הצלחנו לשמור את השינויים");
 
@@ -291,12 +331,15 @@ export async function updateItem(raw: unknown): Promise<void> {
 export async function deleteItem(raw: unknown): Promise<void> {
   const householdId = await requireHousehold();
   const input = DeleteItemSchema.parse(raw);
+  const supabase = supabaseAdmin();
 
-  const { error } = await supabaseAdmin()
+  const itemId = await resolveItemId(supabase, householdId, input);
+
+  const { error } = await supabase
     .from("items")
     .delete()
     .eq("household_id", householdId)
-    .eq("id", input.itemId);
+    .eq("id", itemId);
 
   if (error) throw new Error("לא הצלחנו למחוק את הפריט");
 

@@ -6,7 +6,19 @@ import { useOfflineQueue } from "@/lib/offline/provider";
 
 export function OfflineBanner() {
   const isOnline = useOnlineStatus();
-  const { pending } = useOfflineQueue();
+  const { pending, storageOk } = useOfflineQueue();
+
+  if (!storageOk) {
+    return (
+      <div
+        role="alert"
+        className="sticky top-0 z-40 flex items-center justify-center gap-2 bg-destructive px-4 py-2 text-sm text-destructive-foreground"
+      >
+        <CloudOff className="size-4" aria-hidden />
+        הדפדפן לא נותן לשמור במכשיר. שינויים יאבדו אם תסגרו את הטאב.
+      </div>
+    );
+  }
 
   if (isOnline && pending.length === 0) return null;
 

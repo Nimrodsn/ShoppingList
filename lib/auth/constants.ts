@@ -10,4 +10,13 @@ export const MEMBER_ID_COOKIE = "member_id";
 
 export const HOUSEHOLD_COOKIE_MAX_AGE = 31_536_000;
 
+/**
+ * Client-readable copy of the household id. Not a credential: after migration 0007
+ * every function is service-role only and RLS closes the tables, so the id alone
+ * grants nothing. The offline queue tags entries with it and drops them when the
+ * device joins or leaves a household, so one family's pending edits never replay
+ * into another family's list.
+ */
+export const HOUSEHOLD_ID_COOKIE = "hh_id";
+
 export const IS_SECURE_COOKIE = IS_SECURE_ORIGIN;

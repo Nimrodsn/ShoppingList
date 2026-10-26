@@ -15,7 +15,10 @@ export type CloseTripResult = {
 /**
  * Ends a shopping trip: every checked item moves to purchase_history, the catalog
  * learns it was bought, and the rows are removed from the list. Open items stay.
- * The item's own id becomes the history client_id, so a retry is a no-op.
+ * The whole thing is one locked SQL transaction (public.close_trip): the archived
+ * set and the deleted set are exactly the same rows, a retry heals instead of
+ * losing items, and the item's own id stays the history client_id, so a replay
+ * can never duplicate history.
  */
 export async function closeTrip(raw: unknown): Promise<CloseTripResult> {
   const householdId = await requireHousehold();
@@ -23,64 +26,22 @@ export async function closeTrip(raw: unknown): Promise<CloseTripResult> {
   const supabase = supabaseAdmin();
   const member = await getMember();
 
-  const { data: checked, error } = await supabase
-    .from("items")
-    .select("id, name, quantity, unit, category_id, checked_by")
-    .eq("household_id", householdId)
-    .eq("list_id", listId)
-    .eq("is_checked", true);
-
-  if (error) throw new Error("לא הצלחנו לקרוא את הפריטים המסומנים");
-  if (!checked || checked.length === 0) {
-    return { archived: 0, remaining: 0 };
-  }
-
-  const { data: categories } = await supabase
-    .from("categories")
-    .select("id, key")
-    .eq("household_id", householdId);
-
-  const keyById = new Map((categories ?? []).map((row) => [row.id, row.key]));
-
-  const { error: historyError } = await supabase.from("purchase_history").insert(
-    checked.map((item) => ({
-      client_id: item.id,
-      household_id: householdId,
-      name: item.name,
-      category_key: item.category_id ? (keyById.get(item.category_id) ?? null) : null,
-      quantity: item.quantity,
-      unit: item.unit,
-      purchased_by: item.checked_by ?? member?.name ?? null,
-    })),
-  );
-
-  if (historyError) throw new Error("לא הצלחנו לשמור את היסטוריית הקנייה");
-
-  await supabase.rpc("bump_catalog_usage", {
+  const { data, error } = await supabase.rpc("close_trip", {
     p_household_id: householdId,
-    p_names: checked.map((item) => item.name),
+    p_list_id: listId,
+    p_purchased_by: member?.name ?? null,
   });
 
-  const { error: deleteError } = await supabase
-    .from("items")
-    .delete()
-    .eq("household_id", householdId)
-    .eq("list_id", listId)
-    .eq("is_checked", true);
+  if (error) throw new Error("לא הצלחנו לסגור את הקנייה");
 
-  if (deleteError) throw new Error("לא הצלחנו לנקות את הרשימה");
-
-  const { count } = await supabase
-    .from("items")
-    .select("id", { count: "exact", head: true })
-    .eq("household_id", householdId)
-    .eq("list_id", listId)
-    .eq("is_checked", false);
+  const outcome = data as { archived?: unknown; remaining?: unknown } | null;
+  const archived = typeof outcome?.archived === "number" ? outcome.archived : 0;
+  const remaining = typeof outcome?.remaining === "number" ? outcome.remaining : 0;
 
   revalidatePath("/");
   revalidatePath("/history");
 
-  return { archived: checked.length, remaining: count ?? 0 };
+  return { archived, remaining };
 }
 
 export type AddStaplesResult = { added: number; merged: number };

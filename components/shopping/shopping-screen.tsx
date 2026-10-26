@@ -16,10 +16,10 @@ import {
   applyMutation,
   applyMutations,
   groupItems,
-  isOptimisticId,
+  optimisticClientId,
   type BoardMutation,
 } from "@/lib/board";
-import { NOT_SYNCED_YET, useOfflineQueue } from "@/lib/offline/provider";
+import { useOfflineQueue } from "@/lib/offline/provider";
 import { tap } from "@/lib/haptics";
 import type { Board, BoardItem } from "@/types/board";
 
@@ -64,11 +64,6 @@ export function ShoppingScreen({
   const percent = total === 0 ? 0 : Math.round((grouped.checkedCount / total) * 100);
 
   function handleToggle(item: BoardItem) {
-    if (isOptimisticId(item.id)) {
-      toast.info(NOT_SYNCED_YET);
-      return;
-    }
-
     const isChecked = !item.isChecked;
     const clientId = crypto.randomUUID();
     const mutation: BoardMutation = {
@@ -79,17 +74,21 @@ export function ShoppingScreen({
     };
     tap();
 
+    const addClientId = optimisticClientId(item.id);
+    const ref = addClientId ? { itemClientId: addClientId } : { itemId: item.id };
+
     startTransition(async () => {
       mutate(mutation);
 
-      const result = await queue.run({
+      const run = await queue.run({
         clientId,
+        createdAt: new Date().toISOString(),
         kind: "toggle",
-        input: { clientId, itemId: item.id, isChecked },
+        input: { clientId, ...ref, isChecked },
         optimistic: [mutation],
       });
 
-      if (result === "failed") toast.error("לא הצלחנו לעדכן את הפריט.");
+      if (run.status === "failed") toast.error("לא הצלחנו לעדכן את הפריט.");
     });
   }
 

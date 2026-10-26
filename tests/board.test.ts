@@ -189,7 +189,7 @@ describe("findOpenByNorm", () => {
 
 describe("optimistic ids", () => {
   it("round-trips through the marker", () => {
-    const id = optimisticId();
+    const id = optimisticId("00000000-0000-0000-0000-000000000001");
     expect(isOptimisticId(id)).toBe(true);
     expect(isOptimisticId(crypto.randomUUID())).toBe(false);
   });
