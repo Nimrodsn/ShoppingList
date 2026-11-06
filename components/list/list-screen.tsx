@@ -20,6 +20,7 @@ import {
   type BoardMutation,
 } from "@/lib/board";
 import { useOfflineQueue } from "@/lib/offline/provider";
+import type { CatalogEntry } from "@/lib/catalog-match";
 import type { Board, BoardItem } from "@/types/board";
 
 const UNDO_DURATION = 6000;
@@ -28,10 +29,12 @@ export function ListScreen({
   board,
   memberName,
   stapleNames,
+  catalog,
 }: {
   board: Board;
   memberName: string;
   stapleNames: string[];
+  catalog: CatalogEntry[];
 }) {
   const stapleNorms = useMemo(() => new Set(stapleNames), [stapleNames]);
   const [editing, setEditing] = useState<BoardItem | null>(null);
@@ -223,7 +226,7 @@ export function ListScreen({
       <div className="sticky bottom-0 z-20 space-y-2 border-t bg-background/95 px-4 pt-3 pb-safe backdrop-blur">
         {grouped.openCount > 0 ? (
           <Button asChild variant="secondary" className="h-11 w-full">
-            <Link href={`/shop?list=${board.activeListId}`}>
+            <Link href={`/shop?list=${board.activeListId}`} prefetch>
               <ShoppingCart className="size-4" aria-hidden />
               מצב קנייה
             </Link>
@@ -234,6 +237,7 @@ export function ListScreen({
           listId={board.activeListId}
           categories={board.categories}
           items={items}
+          catalog={catalog}
           memberName={memberName}
           mutate={mutate}
         />

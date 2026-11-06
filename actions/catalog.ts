@@ -3,7 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requireHousehold } from "@/lib/auth/household";
-import { CatalogQuerySchema, ItemNameSchema, UuidSchema } from "@/lib/schemas";
+import { ItemNameSchema, UuidSchema } from "@/lib/schemas";
+import { getCatalog } from "@/actions/catalog-data";
+import { effectiveCatalog } from "@/lib/catalog-match";
 
 export type CatalogSuggestion = {
   id: string;
@@ -13,36 +15,6 @@ export type CatalogSuggestion = {
   emoji: string | null;
   isStaple: boolean;
 };
-
-export async function matchCatalog(
-  rawQuery: string,
-  rawLimit?: number,
-): Promise<CatalogSuggestion[]> {
-  const householdId = await requireHousehold();
-  const { query, limit } = CatalogQuerySchema.parse({
-    query: rawQuery,
-    limit: rawLimit ?? 8,
-  });
-
-  if (query.length === 0) return [];
-
-  const { data, error } = await supabaseAdmin().rpc("match_catalog", {
-    p_household_id: householdId,
-    p_query: query,
-    p_limit: limit,
-  });
-
-  if (error || !data) return [];
-
-  return data.map((row) => ({
-    id: row.id,
-    name: row.name,
-    categoryKey: row.category_key,
-    defaultUnit: row.default_unit,
-    emoji: row.emoji,
-    isStaple: row.is_staple,
-  }));
-}
 
 /**
  * Called when someone corrects an item's category by hand. Upserts a household-scoped
@@ -82,33 +54,16 @@ export async function teachCategory(
  * the global catalog.
  */
 export async function listStaples(): Promise<CatalogSuggestion[]> {
-  const householdId = await requireHousehold();
-
-  const { data, error } = await supabaseAdmin()
-    .from("catalog_items")
-    .select("id, name, name_norm, category_key, default_unit, emoji, is_staple, household_id")
-    .or(`household_id.is.null,household_id.eq.${householdId}`)
-    .order("use_count", { ascending: false })
-    .order("name");
-
-  if (error || !data) return [];
-
-  const effective = new Map<string, (typeof data)[number]>();
-  for (const row of data) {
-    const current = effective.get(row.name_norm);
-    if (!current || (current.household_id === null && row.household_id !== null)) {
-      effective.set(row.name_norm, row);
-    }
-  }
-
-  return [...effective.values()]
-    .filter((row) => row.is_staple)
+  // Shares the per-request catalog fetch with the rest of the page.
+  return effectiveCatalog(await getCatalog())
+    .filter((row) => row.isStaple)
+    .sort((a, b) => b.useCount - a.useCount || a.name.localeCompare(b.name))
     .map((row) => ({
       id: row.id,
       name: row.name,
-      categoryKey: row.category_key,
-      defaultUnit: row.default_unit,
+      categoryKey: row.categoryKey,
+      defaultUnit: row.defaultUnit,
       emoji: row.emoji,
-      isStaple: row.is_staple,
+      isStaple: row.isStaple,
     }));
 }

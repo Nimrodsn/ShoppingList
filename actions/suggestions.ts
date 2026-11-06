@@ -13,11 +13,12 @@ export type ForgottenSuggestion = {
 };
 
 /**
- * Products bought on a rhythm that are overdue. Anything already open on the list is
- * dropped, so the banner never suggests something the family just added.
+ * Products bought on a rhythm that are overdue. The open-list filter runs on the
+ * caller side (the list is already loaded there), so this fetch can start in
+ * parallel with the board instead of waiting for it.
  */
 export const suggestForgotten = cache(
-  async (openNames: string[]): Promise<ForgottenSuggestion[]> => {
+  async (): Promise<ForgottenSuggestion[]> => {
     const householdId = await requireHousehold();
 
     const { data, error } = await supabaseAdmin().rpc("suggest_forgotten", {
@@ -27,17 +28,13 @@ export const suggestForgotten = cache(
 
     if (error || !data) return [];
 
-    const openNorms = new Set(openNames.map(normalizeHebrew));
-
-    return data
-      .filter((row) => !openNorms.has(normalizeHebrew(row.name)))
-      .map((row) => ({
-        name: row.name,
-        categoryKey: row.category_key,
-        avgDays: row.avg_days,
-        daysSince: row.days_since,
-        reason: `בדרך כלל כל ${Math.round(row.avg_days)} ימים, עברו ${Math.round(row.days_since)}`,
-      }));
+    return data.map((row) => ({
+      name: row.name,
+      categoryKey: row.category_key,
+      avgDays: row.avg_days,
+      daysSince: row.days_since,
+      reason: `בדרך כלל כל ${Math.round(row.avg_days)} ימים, עברו ${Math.round(row.days_since)}`,
+    }));
   },
 );
 

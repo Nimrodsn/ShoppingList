@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { Loader2, Mic, MicOff, Plus } from "lucide-react";
 import { toast } from "sonner";
-import { matchCatalog, type CatalogSuggestion } from "@/actions/catalog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { matchCatalogLocal, type CatalogEntry } from "@/lib/catalog-match";
 import { useSpeechInput } from "@/hooks/use-speech-input";
 import { findOpenByNorm, optimisticId, type BoardMutation } from "@/lib/board";
 import type { AddItemResult, BulkAddResult } from "@/actions/items";
@@ -24,44 +23,30 @@ export function AddBar({
   listId,
   categories,
   items,
+  catalog,
   memberName,
   mutate,
 }: {
   listId: string;
   categories: CategoryRef[];
   items: BoardItem[];
+  catalog: CatalogEntry[];
   memberName: string;
   mutate: (mutation: BoardMutation) => void;
 }) {
   const [value, setValue] = useState("");
-  const [matched, setMatched] = useState<{
-    query: string;
-    items: CatalogSuggestion[];
-  }>({ query: "", items: [] });
   const [isPending, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
-  const query = useDebouncedValue(value.trim(), 150);
   const queue = useOfflineQueue();
 
-  // A multi-line or comma-separated paste is a bulk add, so suggestions are pointless.
-  const shouldSuggest = query.length >= 2 && splitBulkInput(query).length <= 1;
-
-  // Derived during render, which keeps results from a previous query off screen
-  // without clearing state from inside the effect.
-  const suggestions = shouldSuggest && matched.query === query ? matched.items : [];
-
-  useEffect(() => {
-    if (!shouldSuggest) return;
-
-    let active = true;
-    void matchCatalog(parseQuantity(query).name || query).then((results) => {
-      if (active) setMatched({ query, items: results });
-    });
-
-    return () => {
-      active = false;
-    };
-  }, [query, shouldSuggest]);
+  // Local matching against the already-loaded catalog: suggestions update on every
+  // keystroke with no debounce and no server round trip. A multi-line or
+  // comma-separated paste is a bulk add, so suggestions are pointless there.
+  const suggestions = useMemo(() => {
+    const query = value.trim();
+    if (query.length < 2 || splitBulkInput(query).length > 1) return [];
+    return matchCatalogLocal(catalog, parseQuantity(query).name || query);
+  }, [value, catalog]);
 
   // `submit` is a hoisted function declaration, so it is safe to reference here.
   const speech = useSpeechInput((transcript) => submit(transcript));

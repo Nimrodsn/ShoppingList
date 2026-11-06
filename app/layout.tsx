@@ -34,6 +34,10 @@ export const metadata: Metadata = {
   icons: { apple: "/icons/icon-192.png" },
 };
 
+// The Supabase project lives in Mumbai (ap-south-1); running the functions there
+// turns every server-to-database round trip from ~220ms (iad1) into ~5ms.
+export const preferredRegion = ["bom1"];
+
 export const viewport: Viewport = {
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#FAFAF9" },
